@@ -22,6 +22,7 @@
 		98626561EF5EAC79B5A98BB5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DFC75CA9E9C75072C3343D8 /* Store.swift */; };
 		9BA4B0BF5C9845DAAF7D7C98 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */; };
 		AC6B4E1B264D638DE4C7113F /* GearClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = A896E25D54C73D73DEA728DB /* GearClick.swift */; };
+		AF7F8473B222D96444A4595E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */; };
 		B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1311CAC5156FF83C775DE5 /* SettingsView.swift */; };
 		BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7115E89A87DAEE80BD259411 /* PayTests.swift */; };
 		BE6DEA937DB26F15AD8F4A15 /* ShiftForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ABB2A61005AE7D603AAA1A7 /* ShiftForm.swift */; };
@@ -69,6 +70,7 @@
 		D9B7E28D470C20B8432B1EE0 /* TimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeField.swift; sourceTree = "<group>"; };
 		DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		E53E8465F388F04B22FBB8F9 /* DemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStore.swift; sourceTree = "<group>"; };
+		E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +184,7 @@
 		FE3FD08E8682910DE482B6EE /* ShaonMac */ = {
 			isa = PBXGroup;
 			children = (
+				E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */,
 				1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */,
 				9EA9A2F7F077F48DAFB88BBD /* Info.plist */,
 				1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */,
@@ -282,6 +285,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF7F8473B222D96444A4595E /* Assets.xcassets in Resources */,
 				9BA4B0BF5C9845DAAF7D7C98 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
