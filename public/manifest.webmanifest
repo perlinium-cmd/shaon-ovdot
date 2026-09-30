@@ -1,0 +1,11 @@
+{
+  "name": "שעון עובדות",
+  "short_name": "שעון עובדות",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F6F6",
+  "theme_color": "#0F766E",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
