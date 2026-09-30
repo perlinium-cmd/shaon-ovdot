@@ -1,6 +1,6 @@
 name: ShaonMac
 options:
-  bundleIdPrefix: com.bee
+  bundleIdPrefix: com.perlinium
   deploymentTarget:
     macOS: "15.0"
   developmentLanguage: he
@@ -38,7 +38,8 @@ targets:
     settings:
       base:
         PRODUCT_NAME: ShaonMac
-        PRODUCT_BUNDLE_IDENTIFIER: com.bee.shaon
+        PRODUCT_BUNDLE_IDENTIFIER: com.perlinium.shaon
+        DEVELOPMENT_TEAM: J4NT95YV4X
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: "שעון עובדות"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.business
@@ -55,7 +56,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.bee.shaon.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.perlinium.shaon.tests
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ShaonMac.app/Contents/MacOS/ShaonMac"
         BUNDLE_LOADER: "$(TEST_HOST)"
 schemes:

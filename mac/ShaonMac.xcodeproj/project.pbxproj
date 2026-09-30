@@ -252,6 +252,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					8B3E1384CC72C1C0749F59A8 = {
+						DevelopmentTeam = J4NT95YV4X;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -349,7 +350,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ShaonMac.app/Contents/MacOS/ShaonMac";
 			};
@@ -362,6 +363,7 @@
 				CODE_SIGN_ENTITLEMENTS = ShaonMac/ShaonMac.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShaonMac/Info.plist;
@@ -371,7 +373,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon;
 				PRODUCT_NAME = ShaonMac;
 				SDKROOT = macosx;
 			};
@@ -447,7 +449,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ShaonMac.app/Contents/MacOS/ShaonMac";
 			};
@@ -460,6 +462,7 @@
 				CODE_SIGN_ENTITLEMENTS = ShaonMac/ShaonMac.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShaonMac/Info.plist;
@@ -469,7 +472,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon;
 				PRODUCT_NAME = ShaonMac;
 				SDKROOT = macosx;
 			};
