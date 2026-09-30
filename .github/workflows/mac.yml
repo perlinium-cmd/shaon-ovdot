@@ -1,0 +1,12 @@
+name: Mac
+on:
+  pull_request:
+    paths: ['mac/**', '.github/workflows/mac.yml']
+jobs:
+  build-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        working-directory: mac
+        run: xcodebuild -project ShaonMac.xcodeproj -scheme ShaonMac -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
