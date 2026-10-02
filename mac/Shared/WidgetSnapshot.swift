@@ -43,7 +43,7 @@ enum WidgetStore {
     static let weekKind = "WeekWidget"
     static let quickKind = "QuickWidget"
 
-    /// `$(TeamIdentifierPrefix)com.bee.shaon`, injected through Info.plist so it follows the signing team.
+    /// `$(TeamIdentifierPrefix)com.perlinium.shaon`, injected through Info.plist so it follows the signing team.
     static var groupID: String? { Bundle.main.object(forInfoDictionaryKey: "ShaonAppGroup") as? String }
     static var url: URL? {
         guard let id = groupID, !id.isEmpty,

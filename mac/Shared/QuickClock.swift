@@ -17,7 +17,7 @@ struct ClockState: Codable, Equatable {
 
 enum QuickClock {
     /// Posted (Darwin notification) by the widget after queuing a shift, so a running app saves it right away.
-    static let changedNotification = "com.bee.shaon.clockChanged"
+    static let changedNotification = "com.perlinium.shaon.clockChanged"
 
     static var url: URL? { WidgetStore.url?.deletingLastPathComponent().appending(path: "clock.json") }
 

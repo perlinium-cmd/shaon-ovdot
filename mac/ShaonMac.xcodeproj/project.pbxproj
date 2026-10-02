@@ -348,9 +348,14 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					1DC6BD70168A77FA62CD6844 = {
+						DevelopmentTeam = J4NT95YV4X;
 						ProvisioningStyle = Automatic;
 					};
+					483346FE3A3D11D9BBF72590 = {
+						DevelopmentTeam = J4NT95YV4X;
+					};
 					8B3E1384CC72C1C0749F59A8 = {
+						DevelopmentTeam = J4NT95YV4X;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -478,7 +483,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.widgets;
 				PRODUCT_NAME = ShaonWidgets;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -496,7 +501,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ShaonMac.app/Contents/MacOS/ShaonMac";
 			};
@@ -518,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon;
 				PRODUCT_NAME = ShaonMac;
 				SDKROOT = macosx;
 			};
@@ -560,6 +565,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -594,7 +600,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ShaonMac.app/Contents/MacOS/ShaonMac";
 			};
@@ -616,7 +622,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon;
 				PRODUCT_NAME = ShaonMac;
 				SDKROOT = macosx;
 			};
@@ -658,6 +664,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -701,7 +708,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.bee.shaon.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.widgets;
 				PRODUCT_NAME = ShaonWidgets;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;

@@ -36,6 +36,6 @@
 	<key>GIDClientID</key>
 	<string>999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2.apps.googleusercontent.com</string>
 	<key>ShaonAppGroup</key>
-	<string>$(TeamIdentifierPrefix)com.bee.shaon</string>
+	<string>$(TeamIdentifierPrefix)com.perlinium.shaon</string>
 </dict>
 </plist>

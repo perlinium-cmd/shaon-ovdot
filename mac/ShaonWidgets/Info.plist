@@ -26,6 +26,6 @@
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
 	<key>ShaonAppGroup</key>
-	<string>$(TeamIdentifierPrefix)com.bee.shaon</string>
+	<string>$(TeamIdentifierPrefix)com.perlinium.shaon</string>
 </dict>
 </plist>
