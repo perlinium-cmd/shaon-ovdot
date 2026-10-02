@@ -39,5 +39,6 @@ final class AuthService {
     func signOut() {
         GIDSignIn.sharedInstance.signOut()
         try? Auth.auth().signOut()
+        WidgetSync.clear()
     }
 }

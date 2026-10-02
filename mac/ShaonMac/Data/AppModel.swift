@@ -13,12 +13,20 @@ final class AppModel {
     @ObservationIgnored private var unsubs: [() -> Void] = []
     @ObservationIgnored private var unsubShifts: (() -> Void)?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
+    @ObservationIgnored private var widgetSync: WidgetSync?
 
     init(store: DataStore) {
         self.store = store
         unsubs.append(store.watchSettings { [weak self] in self?.settings = $0 })
         unsubs.append(store.watchEmployees { [weak self] in self?.employees = $0.sorted { $0.name.localizedCompare($1.name) == .orderedAscending } })
         subscribeShifts()
+        if !store.isDemo {
+            widgetSync = WidgetSync(store: store)
+            observeQuickClock()
+        }
+    }
+    deinit {
+        CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque())
     }
     private func subscribeShifts() {
         unsubShifts?(); shifts = nil
@@ -63,13 +71,45 @@ final class AppModel {
 
     // MARK: shifts
     func addShift(_ s: Shift) async {
-        do {
-            var s = s; s.createdAt = Date().timeIntervalSince1970 * 1000
-            let id = try await store.addShift(s); s.id = id
-            let saved = s
-            undoable("הוספת משמרת", undo: { try await self.store.deleteShifts([id]) }, redo: { try await self.store.restoreShifts([saved]) })
-            say("נשמר: \(fmtDayMonth(s.date)) · \(fmtHM(shiftMinutes(s.in, s.out))) שעות")
-        } catch { fail(error) }
+        do { try await addShiftOrThrow(s) } catch { fail(error) }
+    }
+    private func addShiftOrThrow(_ s: Shift) async throws {
+        var s = s; s.createdAt = Date().timeIntervalSince1970 * 1000
+        let id = try await store.addShift(s); s.id = id
+        let saved = s
+        undoable("הוספת משמרת", undo: { try await self.store.deleteShifts([id]) }, redo: { try await self.store.restoreShifts([saved]) })
+        say("נשמר: \(fmtDayMonth(s.date)) · \(fmtHM(shiftMinutes(s.in, s.out))) שעות")
+    }
+
+    // MARK: quick clock (widget)
+    @ObservationIgnored private var savingClock = false
+
+    private func observeQuickClock() {
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
+            guard let observer else { return }
+            let model = Unmanaged<AppModel>.fromOpaque(observer).takeUnretainedValue()
+            Task { @MainActor in await model.saveClockedShifts() }
+        }, QuickClock.changedNotification as CFString, nil, .deliverImmediately)
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in await self?.saveClockedShifts() }
+        }
+        Task { await saveClockedShifts() }
+    }
+
+    /// Saves shifts clocked from the widget. Each one leaves the queue only after it's stored.
+    func saveClockedShifts() async {
+        guard !savingClock else { return }
+        savingClock = true; defer { savingClock = false }
+        for _ in 0..<100 where employees == nil || settings == nil { try? await Task.sleep(for: .milliseconds(200)) }
+        guard let employees else { return }
+        for p in QuickClock.load().pending {
+            guard let e = employees.first(where: { $0.id == p.empId }) else { QuickClock.removePending(p.id); continue }
+            do {
+                try await addShiftOrThrow(Shift(empId: e.id, date: p.date, month: String(p.date.prefix(7)), in: p.in, out: p.out,
+                                                rate: rate(for: e), special: nil, paid: false))
+                QuickClock.removePending(p.id)
+            } catch { fail(error) }
+        }
     }
     func updateShift(_ new: Shift) async {
         guard let old = shifts?.first(where: { $0.id == new.id }) else { return }

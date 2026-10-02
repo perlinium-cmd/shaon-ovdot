@@ -21,8 +21,9 @@ targets:
   ShaonMac:
     type: application
     platform: macOS
-    sources: [ShaonMac]
+    sources: [ShaonMac, Shared]
     dependencies:
+      - target: ShaonWidgets
       - package: Firebase
         product: FirebaseAuth
       - package: Firebase
@@ -34,6 +35,8 @@ targets:
       properties:
         CFBundleURLTypes:
           - CFBundleURLSchemes: ["com.googleusercontent.apps.999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2"]
+          - CFBundleURLSchemes: ["shaon"]
+        ShaonAppGroup: "$(TeamIdentifierPrefix)com.bee.shaon"
         GIDClientID: "999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2.apps.googleusercontent.com"
     settings:
       base:
@@ -46,6 +49,31 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ShaonMac/ShaonMac.entitlements
+  ShaonWidgets:
+    type: app-extension
+    platform: macOS
+    sources:
+      - ShaonWidgets
+      - Shared
+      - ShaonMac/Models/Models.swift
+      - ShaonMac/Logic/Pay.swift
+      - ShaonMac/Logic/Formatting.swift
+      - ShaonMac/Logic/TimeParse.swift
+    info:
+      path: ShaonWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: "שעון עובדות"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        ShaonAppGroup: "$(TeamIdentifierPrefix)com.bee.shaon"
+    settings:
+      base:
+        PRODUCT_NAME: ShaonWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.bee.shaon.widgets
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: ShaonWidgets/ShaonWidgets.entitlements
+        SKIP_INSTALL: YES
   ShaonTests:
     type: bundle.unit-test
     platform: macOS
