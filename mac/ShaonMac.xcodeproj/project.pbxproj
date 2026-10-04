@@ -8,33 +8,56 @@
 
 /* Begin PBXBuildFile section */
 		063E186EFE82CEEDD372F65E /* DemoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53E8465F388F04B22FBB8F9 /* DemoStore.swift */; };
+		069DBD6F9F314A623F6B8662 /* Pay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE41D5889A506DF3E3F0BED /* Pay.swift */; };
 		095C774C2D926803D3B281CC /* FirestoreStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD6CDA396753142860A60B /* FirestoreStore.swift */; };
 		0CBBA5520458B1176CA4F1C6 /* TimeParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE156B7D65C561DBC1CB57E /* TimeParse.swift */; };
 		0D4FCFBE49FA92FD553338BB /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B125D8531F3E37894792F2C2 /* SummaryView.swift */; };
 		16C1EBA5DA253EB2D89C1EDD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = EACDDB5510F6CE56DBF99CB2 /* FirebaseAuth */; };
 		17805D7EA176FBB9A928A017 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */; };
 		26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
+		33D2BA7510643BB93E7F7A90 /* MonthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024E3EE0A494B115B42C0C49 /* MonthWidget.swift */; };
 		34920B8BD6AFFAFA90CFC1C6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 916D5017F14840F6A30FB450 /* GoogleSignIn */; };
+		4CC85B34559E2A8918BA5337 /* EmployeeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */; };
+		4D9C802C8609CB5C38B6B479 /* WidgetSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9612186FE36F14FD03B5D98 /* WidgetSync.swift */; };
+		560FCF8B3A3DE33D29537223 /* QuickWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8867F29980876F111D83AB2 /* QuickWidget.swift */; };
+		651B7B00D24A2ABA704ABCFB /* WidgetSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */; };
 		6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984AE7ECB486E8AA32223473 /* ShaonApp.swift */; };
 		6DD1EE7F2A262D5A981AB6FD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DEBA393FDF02098C2094F757 /* FirebaseFirestore */; };
+		76AABABD524F342F0646A63B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
 		789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65709F0F9F5DFBC5D7777D29 /* RootView.swift */; };
 		8661B5B47B3FB0F11F0973AC /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB5685C675F79F93ECECEB4 /* AppModel.swift */; };
+		8EEBA12F7E0E764E0075C242 /* WeekWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D88D48AA3535AD2478933E /* WeekWidget.swift */; };
+		96550D6568810FC4831FD92F /* ShaonWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCCF6A29DB0DE492FCAC1DEA /* ShaonWidgets.swift */; };
 		98626561EF5EAC79B5A98BB5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DFC75CA9E9C75072C3343D8 /* Store.swift */; };
 		9BA4B0BF5C9845DAAF7D7C98 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */; };
+		A51C6576F6CC6ECA7854C431 /* ShaonWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AC6B4E1B264D638DE4C7113F /* GearClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = A896E25D54C73D73DEA728DB /* GearClick.swift */; };
 		AF7F8473B222D96444A4595E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */; };
 		B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1311CAC5156FF83C775DE5 /* SettingsView.swift */; };
+		B3DB2B5266B34F024F4C0D19 /* QuickClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C8568915B8EA7C6D828CC9 /* QuickClock.swift */; };
 		BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7115E89A87DAEE80BD259411 /* PayTests.swift */; };
 		BE6DEA937DB26F15AD8F4A15 /* ShiftForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ABB2A61005AE7D603AAA1A7 /* ShiftForm.swift */; };
+		C22C609E3715F3F4BF6A1885 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
+		C6E6899434004DEC6A8A4E27 /* TimeParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE156B7D65C561DBC1CB57E /* TimeParse.swift */; };
 		CAB621B05001EBA1CD73AD64 /* Pay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE41D5889A506DF3E3F0BED /* Pay.swift */; };
 		CD0591CC28352D37A6860C0D /* TimeWheelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1D7D1F7A7DB5D3AF0036D3 /* TimeWheelPicker.swift */; };
 		D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9149960A6CA7DE765BE251B0 /* Haptics.swift */; };
 		D4CB958B5A4CA760AE3AB2AA /* EmployeeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */; };
+		D7B1A3B3BCB319FCF39D3899 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */; };
 		DE5882363DC9CAA5C2041158 /* TimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B7E28D470C20B8432B1EE0 /* TimeField.swift */; };
 		EAAB0A96940BB09E06B5C5A1 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
+		EB5FC708F8B5965772A64817 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */; };
+		F02CE955B926FB0B93EC052B /* QuickClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C8568915B8EA7C6D828CC9 /* QuickClock.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		64EF3C171C27F1174526A674 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8E2BBE2E6AA995FC125C1D08 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1DC6BD70168A77FA62CD6844;
+			remoteInfo = ShaonWidgets;
+		};
 		B297E4E8F855CCBE50FD6FB1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8E2BBE2E6AA995FC125C1D08 /* Project object */;
@@ -44,11 +67,30 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		B0858E2C3D00011201FC89E5 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A51C6576F6CC6ECA7854C431 /* ShaonWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		024E3EE0A494B115B42C0C49 /* MonthWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthWidget.swift; sourceTree = "<group>"; };
 		049DD412C39A517266CA24B4 /* ShaonMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShaonMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		06FD6CDA396753142860A60B /* FirestoreStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreStore.swift; sourceTree = "<group>"; };
+		07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeWidget.swift; sourceTree = "<group>"; };
 		1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonMac.entitlements; sourceTree = "<group>"; };
+		21C8568915B8EA7C6D828CC9 /* QuickClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickClock.swift; sourceTree = "<group>"; };
+		29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotTests.swift; sourceTree = "<group>"; };
+		429264388C0234E7293E8F9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5089DCDC13CEF78D03545100 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		5BB5685C675F79F93ECECEB4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		65709F0F9F5DFBC5D7777D29 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -61,16 +103,23 @@
 		8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeView.swift; sourceTree = "<group>"; };
 		9149960A6CA7DE765BE251B0 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		984AE7ECB486E8AA32223473 /* ShaonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaonApp.swift; sourceTree = "<group>"; };
+		9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
 		9C1D7D1F7A7DB5D3AF0036D3 /* TimeWheelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeWheelPicker.swift; sourceTree = "<group>"; };
 		9EA9A2F7F077F48DAFB88BBD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9EE156B7D65C561DBC1CB57E /* TimeParse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeParse.swift; sourceTree = "<group>"; };
 		A896E25D54C73D73DEA728DB /* GearClick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GearClick.swift; sourceTree = "<group>"; };
 		A8C68CA57BD3DAB3CDBFCADC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B125D8531F3E37894792F2C2 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		B9612186FE36F14FD03B5D98 /* WidgetSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSync.swift; sourceTree = "<group>"; };
+		BCCF6A29DB0DE492FCAC1DEA /* ShaonWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaonWidgets.swift; sourceTree = "<group>"; };
+		CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShaonWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6362FBF6260FD8133669292 /* ShaonWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonWidgets.entitlements; sourceTree = "<group>"; };
+		D8867F29980876F111D83AB2 /* QuickWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickWidget.swift; sourceTree = "<group>"; };
 		D9B7E28D470C20B8432B1EE0 /* TimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeField.swift; sourceTree = "<group>"; };
 		DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		E53E8465F388F04B22FBB8F9 /* DemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStore.swift; sourceTree = "<group>"; };
 		E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F0D88D48AA3535AD2478933E /* WeekWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekWidget.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,8 +140,18 @@
 			isa = PBXGroup;
 			children = (
 				7115E89A87DAEE80BD259411 /* PayTests.swift */,
+				29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */,
 			);
 			path = ShaonTests;
+			sourceTree = "<group>";
+		};
+		4191132A9417FB2E0C8D86F3 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				21C8568915B8EA7C6D828CC9 /* QuickClock.swift */,
+				9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		48CFA1C1DF8D89F66318337D /* Views */ = {
@@ -106,6 +165,20 @@
 				D9B7E28D470C20B8432B1EE0 /* TimeField.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		56003A4849C839925AE6BD54 /* ShaonWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */,
+				429264388C0234E7293E8F9A /* Info.plist */,
+				024E3EE0A494B115B42C0C49 /* MonthWidget.swift */,
+				D8867F29980876F111D83AB2 /* QuickWidget.swift */,
+				D6362FBF6260FD8133669292 /* ShaonWidgets.entitlements */,
+				BCCF6A29DB0DE492FCAC1DEA /* ShaonWidgets.swift */,
+				F0D88D48AA3535AD2478933E /* WeekWidget.swift */,
+			);
+			path = ShaonWidgets;
 			sourceTree = "<group>";
 		};
 		6EDEBC024FA9E1E20F305EE0 /* Feedback */ = {
@@ -133,6 +206,7 @@
 				E53E8465F388F04B22FBB8F9 /* DemoStore.swift */,
 				06FD6CDA396753142860A60B /* FirestoreStore.swift */,
 				6DFC75CA9E9C75072C3343D8 /* Store.swift */,
+				B9612186FE36F14FD03B5D98 /* WidgetSync.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -158,6 +232,8 @@
 			children = (
 				FE3FD08E8682910DE482B6EE /* ShaonMac */,
 				3EE6607CD9E86B2C3CD8509D /* ShaonTests */,
+				56003A4849C839925AE6BD54 /* ShaonWidgets */,
+				4191132A9417FB2E0C8D86F3 /* Shared */,
 				CA1992C8BF070AD2836514D2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -167,6 +243,7 @@
 			children = (
 				049DD412C39A517266CA24B4 /* ShaonMac.app */,
 				86E0CBF19FC5ADB1C6E3C2D0 /* ShaonTests.xctest */,
+				CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -202,6 +279,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1DC6BD70168A77FA62CD6844 /* ShaonWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F354A2F3ADC9306EF2DD65F0 /* Build configuration list for PBXNativeTarget "ShaonWidgets" */;
+			buildPhases = (
+				9A713EB852F2BA71F33F54F6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShaonWidgets;
+			packageProductDependencies = (
+			);
+			productName = ShaonWidgets;
+			productReference = CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		483346FE3A3D11D9BBF72590 /* ShaonTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D90782B42919D330A6EFB14F /* Build configuration list for PBXNativeTarget "ShaonTests" */;
@@ -227,10 +321,12 @@
 				0C3844861C9EBACCB1BF2626 /* Sources */,
 				CB22B30944697F6AA92ED5BE /* Resources */,
 				C1334271DFA6EF9619631C27 /* Frameworks */,
+				B0858E2C3D00011201FC89E5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2D883A66EC7C0ED8392C7593 /* PBXTargetDependency */,
 			);
 			name = ShaonMac;
 			packageProductDependencies = (
@@ -251,6 +347,13 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					1DC6BD70168A77FA62CD6844 = {
+						DevelopmentTeam = J4NT95YV4X;
+						ProvisioningStyle = Automatic;
+					};
+					483346FE3A3D11D9BBF72590 = {
+						DevelopmentTeam = J4NT95YV4X;
+					};
 					8B3E1384CC72C1C0749F59A8 = {
 						DevelopmentTeam = J4NT95YV4X;
 						ProvisioningStyle = Automatic;
@@ -276,6 +379,7 @@
 			projectRoot = "";
 			targets = (
 				8B3E1384CC72C1C0749F59A8 /* ShaonMac */,
+				1DC6BD70168A77FA62CD6844 /* ShaonWidgets */,
 				483346FE3A3D11D9BBF72590 /* ShaonTests */,
 			);
 		};
@@ -299,6 +403,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */,
+				651B7B00D24A2ABA704ABCFB /* WidgetSnapshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -316,6 +421,7 @@
 				D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */,
 				26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */,
 				CAB621B05001EBA1CD73AD64 /* Pay.swift in Sources */,
+				F02CE955B926FB0B93EC052B /* QuickClock.swift in Sources */,
 				789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */,
 				B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */,
 				6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */,
@@ -325,12 +431,37 @@
 				DE5882363DC9CAA5C2041158 /* TimeField.swift in Sources */,
 				0CBBA5520458B1176CA4F1C6 /* TimeParse.swift in Sources */,
 				CD0591CC28352D37A6860C0D /* TimeWheelPicker.swift in Sources */,
+				D7B1A3B3BCB319FCF39D3899 /* WidgetSnapshot.swift in Sources */,
+				4D9C802C8609CB5C38B6B479 /* WidgetSync.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A713EB852F2BA71F33F54F6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4CC85B34559E2A8918BA5337 /* EmployeeWidget.swift in Sources */,
+				76AABABD524F342F0646A63B /* Formatting.swift in Sources */,
+				C22C609E3715F3F4BF6A1885 /* Models.swift in Sources */,
+				33D2BA7510643BB93E7F7A90 /* MonthWidget.swift in Sources */,
+				069DBD6F9F314A623F6B8662 /* Pay.swift in Sources */,
+				B3DB2B5266B34F024F4C0D19 /* QuickClock.swift in Sources */,
+				560FCF8B3A3DE33D29537223 /* QuickWidget.swift in Sources */,
+				96550D6568810FC4831FD92F /* ShaonWidgets.swift in Sources */,
+				C6E6899434004DEC6A8A4E27 /* TimeParse.swift in Sources */,
+				8EEBA12F7E0E764E0075C242 /* WeekWidget.swift in Sources */,
+				EB5FC708F8B5965772A64817 /* WidgetSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		2D883A66EC7C0ED8392C7593 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1DC6BD70168A77FA62CD6844 /* ShaonWidgets */;
+			targetProxy = 64EF3C171C27F1174526A674 /* PBXContainerItemProxy */;
+		};
 		A0D21ED73A2440F085C3E6F2 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 8B3E1384CC72C1C0749F59A8 /* ShaonMac */;
@@ -339,6 +470,26 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		3987B3C2C8A7C4B9E4DC18E4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShaonWidgets/ShaonWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ShaonWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.widgets;
+				PRODUCT_NAME = ShaonWidgets;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
 		39C04B3DA7F621A708055394 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -363,7 +514,6 @@
 				CODE_SIGN_ENTITLEMENTS = ShaonMac/ShaonMac.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShaonMac/Info.plist;
@@ -415,6 +565,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -462,7 +613,6 @@
 				CODE_SIGN_ENTITLEMENTS = ShaonMac/ShaonMac.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShaonMac/Info.plist;
@@ -514,6 +664,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = J4NT95YV4X;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -544,6 +695,26 @@
 			};
 			name = Debug;
 		};
+		F84758ADF56FDE67803951D1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShaonWidgets/ShaonWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = ShaonWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.perlinium.shaon.widgets;
+				PRODUCT_NAME = ShaonWidgets;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -570,6 +741,15 @@
 			buildConfigurations = (
 				9CDC4F27247B6417FE644BC2 /* Debug */,
 				39C04B3DA7F621A708055394 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F354A2F3ADC9306EF2DD65F0 /* Build configuration list for PBXNativeTarget "ShaonWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3987B3C2C8A7C4B9E4DC18E4 /* Debug */,
+				F84758ADF56FDE67803951D1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

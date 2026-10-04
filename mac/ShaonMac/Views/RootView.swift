@@ -59,6 +59,12 @@ struct RootView: View {
         .sheet(isPresented: $newEmployee) { EmployeeEditor(emp: nil) }
         .onReceive(NotificationCenter.default.publisher(for: .newEmployee)) { _ in newEmployee = true }
         .onReceive(NotificationCenter.default.publisher(for: .showSummary)) { _ in route = .summary }
+        .onReceive(NotificationCenter.default.publisher(for: .openRoute)) { n in
+            // shaon://summary, shaon://employee/<id>
+            guard let url = n.object as? URL else { return }
+            if url.host() == "employee", let id = url.pathComponents.dropFirst().first, model.emp(id) != nil { route = .employee(id) }
+            else { route = .summary }
+        }
     }
 
     private func filtered(active: Bool) -> [Employee] {
@@ -107,4 +113,5 @@ struct Onboarding: View {
 extension Notification.Name {
     static let newEmployee = Notification.Name("shaon.newEmployee")
     static let showSummary = Notification.Name("shaon.showSummary")
+    static let openRoute = Notification.Name("shaon.openRoute")
 }

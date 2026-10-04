@@ -24,10 +24,18 @@
 				<string>com.googleusercontent.apps.999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>shaon</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>GIDClientID</key>
 	<string>999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2.apps.googleusercontent.com</string>
+	<key>ShaonAppGroup</key>
+	<string>$(TeamIdentifierPrefix)com.perlinium.shaon</string>
 </dict>
 </plist>
