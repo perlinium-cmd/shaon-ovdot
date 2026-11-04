@@ -5,8 +5,52 @@ on:
 jobs:
   build-test:
     runs-on: macos-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Validate pinned Firebase dependency
+        working-directory: mac
+        run: |
+          set -euo pipefail
+          lock=ShaonMac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          cp "$lock" "$RUNNER_TEMP/Package.resolved.before"
+          xcodebuild -resolvePackageDependencies -project ShaonMac.xcodeproj -scheme ShaonMac -onlyUsePackageVersionsFromResolvedFile
+          echo 'Post-resolution lockfile diff:'
+          diff -u "$RUNNER_TEMP/Package.resolved.before" "$lock" || true
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          before = json.loads((Path(os.environ['RUNNER_TEMP']) / 'Package.resolved.before').read_text())
+          after = json.loads(Path('ShaonMac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved').read_text())
+          assert before['pins'] == after['pins'], 'Resolution changed dependency pins'
+          pin = next(p for p in after['pins'] if p['identity'] == 'firebase-ios-sdk')
+          assert pin['state']['version'] == '12.19.3', pin
+          assert pin['state']['revision'] == '42cf1417c51c5e3bfbae5d3ab89b778f8fdc4bb8', pin
+          print('Firebase 12.19.3 exact revision and all other pins preserved')
+          print('originHash before:', before.get('originHash'))
+          print('originHash after:', after.get('originHash'))
+          PY
+      - name: Check XcodeGen Firebase requirement in an isolated copy
+        working-directory: mac
+        run: |
+          set -euo pipefail
+          if ! command -v xcodegen >/dev/null; then brew install xcodegen; fi
+          xcodegen --version
+          cp -R . "$RUNNER_TEMP/shaon-xcodegen-check"
+          cd "$RUNNER_TEMP/shaon-xcodegen-check"
+          xcodegen generate --spec project.yml
+          plutil -convert json -o "$RUNNER_TEMP/generated-project.json" ShaonMac.xcodeproj/project.pbxproj
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          project = json.loads((Path(os.environ['RUNNER_TEMP']) / 'generated-project.json').read_text())
+          refs = [v for v in project['objects'].values() if v.get('isa') == 'XCRemoteSwiftPackageReference' and 'firebase-ios-sdk' in v.get('repositoryURL', '')]
+          assert len(refs) == 1, refs
+          assert refs[0]['requirement'] == {'kind': 'upToNextMajorVersion', 'minimumVersion': '12.19.3'}, refs
+          print('XcodeGen produces the same Firebase minimum requirement: 12.19.3')
+          PY
       - name: Build and test
         working-directory: mac
-        run: xcodebuild -project ShaonMac.xcodeproj -scheme ShaonMac -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+        run: xcodebuild -project ShaonMac.xcodeproj -scheme ShaonMac -destination 'platform=macOS' -onlyUsePackageVersionsFromResolvedFile CODE_SIGNING_ALLOWED=NO test
