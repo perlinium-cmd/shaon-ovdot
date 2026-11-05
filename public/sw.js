@@ -5,7 +5,7 @@
 const CACHE = 'shaon-v1';
 const SDK = 'https://www.gstatic.com/firebasejs/12.19.0';
 const SHELL = [
-  './', 'app.js', 'data.js', 'firebase-config.js', 'styles.css', 'manifest.webmanifest',
+  './', 'app.js', 'data.js', 'pay.js', 'firebase-config.js', 'styles.css', 'manifest.webmanifest',
   'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
 ];
 const SDK_FILES = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map((f) => `${SDK}/${f}`);

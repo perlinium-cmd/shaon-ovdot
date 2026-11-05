@@ -30,7 +30,7 @@ async function createFirebaseStore() {
   const snapList = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   /* Firestore applies a write on the device at once (the persistent cache keeps it in IndexedDB, so it
-     survives the app closing or the phone turning off) and sends it to the server when it can. Its promise,
+     survives the app closing or the device turning off) and sends it to the server when it can. Its promise,
      though, waits for the server — offline that can be hours. So the UI waits only briefly: after that the
      write is already safe on the device and syncs by itself. A failure that comes later goes to onLateError. */
   const settle = (p) => new Promise((resolve, reject) => {
@@ -58,6 +58,7 @@ async function createFirebaseStore() {
 
   /** One-time move of data saved before per-user spaces existed (root collections, owner-only). */
   async function migrateLegacy() {
+    // Checked once per account: on later starts it must not hold up opening the app (e.g. with no signal).
     const flag = `migrated-${uid}`;
     try { if (localStorage.getItem(flag)) return; } catch { /* ignore */ }
     const done = () => { try { localStorage.setItem(flag, '1'); } catch { /* ignore */ } };
@@ -134,36 +135,18 @@ async function createFirebaseStore() {
         await settle(batch.commit());
       }
     },
-
-    /* Open shifts: clocks/{empId} = {date, in, startedAt, note, special}. Kept apart from shifts so that a
-       shift without an exit time never reaches totals, exports or the Mac app. */
-    watchClocks(cb, onErr) {
-      return fs.onSnapshot(colRef('clocks'), (s) => cb(snapList(s)), onErr);
-    },
-    setClock: (empId, data) => settle(fs.setDoc(docRef('clocks', empId), data)),
-    clearClock: (empId) => settle(fs.deleteDoc(docRef('clocks', empId))),
-    /** Exit recorded: the finished shift is added and the open one removed in one atomic write. */
-    closeClock(empId, shift) {
-      const ref = fs.doc(colRef('shifts'));
-      const batch = fs.writeBatch(db);
-      batch.set(ref, { ...shift, createdAt: Date.now() });
-      batch.delete(docRef('clocks', empId));
-      return settle(batch.commit()).then(() => ref);
-    },
     async countEmployeeShifts(id) {
       return (await fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', id)))).size;
     },
     /** Everything that belongs to one employee, as {col, id, data} — used for delete + undo. */
     async employeeBundle(id) {
-      const [emp, shifts, pays, clock] = await Promise.all([
+      const [emp, shifts, pays] = await Promise.all([
         fs.getDoc(docRef('employees', id)),
         fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', id))),
         fs.getDocs(fs.query(colRef('payments'), fs.where('empId', '==', id))),
-        getLocalFirst(docRef('clocks', id)).catch(() => null),
       ]);
       return [
         ...(emp.exists() ? [{ col: 'employees', id, data: emp.data() }] : []),
-        ...(clock?.exists() ? [{ col: 'clocks', id, data: clock.data() }] : []),
         ...shifts.docs.map((d) => ({ col: 'shifts', id: d.id, data: d.data() })),
         ...pays.docs.map((d) => ({ col: 'payments', id: d.id, data: d.data() })),
       ];
@@ -180,6 +163,16 @@ async function createFirebaseStore() {
       for (let i = 0; i < snaps.length; i += 400) {
         const batch = fs.writeBatch(db);
         snaps.slice(i, i + 400).forEach(({ col, id, data }) => (data ? batch.set(docRef(col, id), data) : batch.delete(docRef(col, id))));
+        await settle(batch.commit());
+      }
+    },
+    /** Before a rate change: write `rate` onto this employee's shifts that have none yet (shifts from her phone). */
+    async lockRates(empId, rate) {
+      const snap = await fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', empId)));
+      const ids = snap.docs.filter((d) => d.data().rate == null).map((d) => d.id);
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = fs.writeBatch(db);
+        ids.slice(i, i + 400).forEach((id) => batch.update(docRef('shifts', id), { rate }));
         await settle(batch.commit());
       }
     },
@@ -207,7 +200,6 @@ function createDemoStore() {
   };
   let data = load() || { settings: {}, employees: {}, shifts: {} };
   data.payments ||= {};
-  data.clocks ||= {};
   const listeners = new Set();
   const persist = () => {
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignore */ }
@@ -245,7 +237,6 @@ function createDemoStore() {
     async countEmployeeShifts(id) { return Object.values(data.shifts).filter((s) => s.empId === id).length; },
     async employeeBundle(id) {
       const out = data.employees[id] ? [{ col: 'employees', id, data: clone(data.employees[id]) }] : [];
-      if (data.clocks[id]) out.push({ col: 'clocks', id, data: clone(data.clocks[id]) });
       for (const col of ['shifts', 'payments']) {
         Object.entries(data[col]).forEach(([did, d]) => { if (d.empId === id) out.push({ col, id: did, data: clone(d) }); });
       }
@@ -257,12 +248,9 @@ function createDemoStore() {
       snaps.forEach(({ col, id, data: d }) => { if (d) data[col][id] = clone(d); else delete data[col][id]; });
       persist();
     },
-    watchClocks: (cb) => watch(() => cb(Object.entries(data.clocks).map(([id, c]) => ({ id, ...c })))),
-    async setClock(empId, d) { await delay(); data.clocks[empId] = clone(d); persist(); },
-    async clearClock(empId) { await delay(); delete data.clocks[empId]; persist(); },
-    async closeClock(empId, d) {
-      await delay(); const id = uid();
-      data.shifts[id] = { ...d, createdAt: Date.now() }; delete data.clocks[empId]; persist(); return { id };
+    async lockRates(empId, rate) {
+      Object.values(data.shifts).forEach((sh) => { if (sh.empId === empId && sh.rate == null) sh.rate = rate; });
+      persist();
     },
     async getShiftsRange(from, to) {
       await delay();

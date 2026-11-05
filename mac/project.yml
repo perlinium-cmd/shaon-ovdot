@@ -93,3 +93,6 @@ schemes:
       targets: { ShaonMac: all }
     test:
       targets: [ShaonTests]
+      # The test host must never open the real Firestore store (it shares the container with the installed app).
+      commandLineArguments:
+        "-demo": true

@@ -1,0 +1,19 @@
+{
+  "about": "Shared pay test cases. The web app (public/pay.js), the Mac app (Pay.swift) and the Android app (Pay.kt) must all produce these numbers. shift.rate / emp.rate null = not set. pay is compared with a 0.001 tolerance.",
+  "cases": [
+    { "name": "regular day", "shift": { "in": "08:00", "out": "16:30", "rate": 40 }, "minutes": 510, "pay": 340 },
+    { "name": "overnight", "shift": { "in": "22:00", "out": "06:00", "rate": 40 }, "minutes": 480, "pay": 320, "overnight": true },
+    { "name": "same in and out is zero", "shift": { "in": "08:00", "out": "08:00", "rate": 40 }, "minutes": 0, "pay": 0 },
+    { "name": "open shift (no clock-out yet)", "shift": { "in": "08:00", "out": "", "rate": 40 }, "minutes": 0, "pay": 0 },
+    { "name": "odd minutes and fractional rate", "shift": { "in": "08:07", "out": "13:52", "rate": 37.5 }, "minutes": 345, "pay": 215.625 },
+    { "name": "special rate for the whole shift", "shift": { "in": "08:00", "out": "16:00", "rate": 40, "special": { "rate": 60, "hours": null } }, "minutes": 480, "pay": 480 },
+    { "name": "special rate for 2 hours", "shift": { "in": "08:00", "out": "16:00", "rate": 40, "special": { "rate": 60, "hours": 2 } }, "minutes": 480, "pay": 360 },
+    { "name": "special hours capped at shift length", "shift": { "in": "08:00", "out": "10:00", "rate": 40, "special": { "rate": 60, "hours": 5 } }, "minutes": 120, "pay": 120 },
+    { "name": "special without a rate is ignored", "shift": { "in": "08:00", "out": "10:00", "rate": 40, "special": { "rate": null, "hours": 1 } }, "minutes": 120, "pay": 80 },
+    { "name": "overnight with partial special", "shift": { "in": "20:00", "out": "02:00", "rate": 40, "special": { "rate": 50, "hours": 3 } }, "minutes": 360, "pay": 270, "overnight": true },
+    { "name": "falls back to employee rate", "shift": { "in": "08:00", "out": "09:00", "rate": null }, "emp": { "rate": 50 }, "defaultRate": 40, "minutes": 60, "pay": 50 },
+    { "name": "falls back to default rate", "shift": { "in": "08:00", "out": "09:00", "rate": null }, "emp": { "rate": null }, "defaultRate": 40, "minutes": 60, "pay": 40 },
+    { "name": "shift rate wins over employee rate", "shift": { "in": "08:00", "out": "09:30", "rate": 44 }, "emp": { "rate": 50 }, "defaultRate": 40, "minutes": 90, "pay": 66 },
+    { "name": "no rate anywhere", "shift": { "in": "08:00", "out": "09:00", "rate": null }, "emp": null, "defaultRate": null, "minutes": 60, "pay": 0 }
+  ]
+}

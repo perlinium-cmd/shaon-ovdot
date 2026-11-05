@@ -1,0 +1,13 @@
+{
+  "name": "shaon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/pay.test.mjs",
+    "test:rules": "npx -y firebase-tools@15 emulators:exec --only firestore --project demo-shaon \"node --test tests/rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0"
+  }
+}

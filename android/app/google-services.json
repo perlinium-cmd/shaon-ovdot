@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "999670608252",
+    "project_id": "shaon-ovdot-2c10",
+    "storage_bucket": "shaon-ovdot-2c10.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999670608252:android:713d6acfd382e4090ab4f9",
+        "android_client_info": {
+          "package_name": "com.perlinium.shaon.employee"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "999670608252-g6lmc2ner9ahl60u4p5c7uri78v4m5n7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvpPkWVM-5yvMJvHbnxQ2lRF_9GtLClJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "999670608252-g6lmc2ner9ahl60u4p5c7uri78v4m5n7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.bee.shaon"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
