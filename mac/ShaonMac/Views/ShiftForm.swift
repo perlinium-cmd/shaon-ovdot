@@ -58,7 +58,7 @@ struct ShiftForm: View {
                 }
             }
             if !dup.isEmpty {
-                Label("כבר רשומה משמרת ב-\(fmtDayMonth(dateS)): " + dup.map { "\(model.fmt($0.in))–\(model.fmt($0.out))" }.joined(separator: ", "), systemImage: "exclamationmark.circle")
+                Label("כבר רשומה משמרת ב-\(fmtDayMonth(dateS)): " + dup.map { $0.isOpen ? "\(model.fmt($0.in)) (עדיין במשמרת)" : "\(model.fmt($0.in))–\(model.fmt($0.out))" }.joined(separator: ", "), systemImage: "exclamationmark.circle")
                     .foregroundStyle(.orange).font(.callout)
             }
             HStack {
@@ -123,6 +123,7 @@ struct ShiftForm: View {
         }
         if var s = shift {
             s.date = dateS; s.month = String(dateS.prefix(7)); s.in = tin; s.out = tout; s.special = special
+            if s.isOpen { s.open = false }   // the manager closed a running phone shift
             await model.updateShift(s)
             onDone()
         } else {

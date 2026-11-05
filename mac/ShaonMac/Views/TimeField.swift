@@ -15,11 +15,11 @@ struct TimeField: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 4) {
-                TextField(model.twelve ? "8:00" : "08:00", text: $text)
+                TextField("", text: $text, prompt: Text(model.twelve ? "8:00" : "08:00"))
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.center)
                     .monospacedDigit()
-                    .frame(width: 74)
+                    .frame(width: 86)
                     .focused($focused)
                     .onSubmit(commit)
                     .onChange(of: focused) { _, f in if !f { commit() } }

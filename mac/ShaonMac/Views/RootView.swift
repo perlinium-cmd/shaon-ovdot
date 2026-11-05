@@ -1,11 +1,22 @@
 import SwiftUI
 
-enum Route: Hashable { case summary, employee(String) }
+enum Route: Hashable {
+    case summary, requests, phones, employee(String)
+    init?(launchArg a: String?) {
+        switch a {
+        case "requests": self = .requests
+        case "phones": self = .phones
+        case let a? where a.hasPrefix("emp:"): self = .employee(String(a.dropFirst(4)))
+        default: return nil
+        }
+    }
+}
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.undoManager) private var undoManager
-    @State private var route: Route? = .summary
+    // `-route requests|phones|emp:<id>` opens a page directly (used for screenshots of the demo).
+    @State private var route: Route? = Route(launchArg: UserDefaults.standard.string(forKey: "route")) ?? .summary
     @State private var newEmployee = false
     @State private var search = ""
 
@@ -32,6 +43,9 @@ struct RootView: View {
             let agg = model.agg
             List(selection: $route) {
                 Label("סיכום חודשי", systemImage: "chart.bar").tag(Route.summary)
+                Label("בקשות", systemImage: "tray").tag(Route.requests)
+                    .badge(model.pendingRequests.count)
+                Label("טלפונים מחוברים", systemImage: "iphone.gen3").tag(Route.phones)
                 Section("עובדות") {
                     ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)) }
                 }
@@ -44,9 +58,17 @@ struct RootView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
             .toolbar { ToolbarItem { Button { newEmployee = true } label: { Label("עובדת חדשה", systemImage: "person.badge.plus") }.help("עובדת חדשה (⌘N)") } }
         } detail: {
-            switch route ?? .summary {
-            case .summary: SummaryView { route = .employee($0) }
-            case .employee(let id): EmployeeView(empId: id).id(id)
+            VStack(spacing: 0) {
+                LiveBanner { route = .employee($0) }
+                Group {
+                    switch route ?? .summary {
+                    case .summary: SummaryView { route = .employee($0) }
+                    case .requests: RequestsView()
+                    case .phones: PhonesView()
+                    case .employee(let id): EmployeeView(empId: id).id(id)
+                    }
+                }
+                .frame(maxHeight: .infinity)
             }
         }
         .toolbar {
@@ -68,6 +90,9 @@ struct RootView: View {
         HStack {
             Avatar(name: e.name, size: 26)
             Text(e.name)
+            if model.openShift(of: e.id) != nil {
+                Circle().fill(.green).frame(width: 8, height: 8).help("בעבודה עכשיו")
+            }
             Spacer()
             if let a, !a.shifts.isEmpty, a.unpaid > 0 { Text(fmtMoney(a.unpaid)).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
             else if let a, !a.shifts.isEmpty { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }

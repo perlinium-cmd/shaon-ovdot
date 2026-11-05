@@ -15,10 +15,12 @@
 		17805D7EA176FBB9A928A017 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */; };
 		26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
 		34920B8BD6AFFAFA90CFC1C6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 916D5017F14840F6A30FB450 /* GoogleSignIn */; };
+		6B0C6FFD9954F38C54DAA601 /* PhoneFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */; };
 		6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984AE7ECB486E8AA32223473 /* ShaonApp.swift */; };
 		6DD1EE7F2A262D5A981AB6FD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DEBA393FDF02098C2094F757 /* FirebaseFirestore */; };
 		789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65709F0F9F5DFBC5D7777D29 /* RootView.swift */; };
 		8661B5B47B3FB0F11F0973AC /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB5685C675F79F93ECECEB4 /* AppModel.swift */; };
+		8E9D209734E87C4925468E05 /* PhonesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9300ED68601D21C54A76F48 /* PhonesView.swift */; };
 		98626561EF5EAC79B5A98BB5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DFC75CA9E9C75072C3343D8 /* Store.swift */; };
 		9BA4B0BF5C9845DAAF7D7C98 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */; };
 		AC6B4E1B264D638DE4C7113F /* GearClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = A896E25D54C73D73DEA728DB /* GearClick.swift */; };
@@ -51,6 +53,7 @@
 		1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonMac.entitlements; sourceTree = "<group>"; };
 		5089DCDC13CEF78D03545100 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneFlowTests.swift; sourceTree = "<group>"; };
 		5BB5685C675F79F93ECECEB4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		65709F0F9F5DFBC5D7777D29 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		6DFC75CA9E9C75072C3343D8 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
@@ -73,6 +76,7 @@
 		DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		E53E8465F388F04B22FBB8F9 /* DemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStore.swift; sourceTree = "<group>"; };
 		E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E9300ED68601D21C54A76F48 /* PhonesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +97,7 @@
 			isa = PBXGroup;
 			children = (
 				7115E89A87DAEE80BD259411 /* PayTests.swift */,
+				588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */,
 				C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */,
 			);
 			path = ShaonTests;
@@ -102,6 +107,7 @@
 			isa = PBXGroup;
 			children = (
 				8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */,
+				E9300ED68601D21C54A76F48 /* PhonesView.swift */,
 				65709F0F9F5DFBC5D7777D29 /* RootView.swift */,
 				7A1311CAC5156FF83C775DE5 /* SettingsView.swift */,
 				8ABB2A61005AE7D603AAA1A7 /* ShiftForm.swift */,
@@ -302,6 +308,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */,
+				6B0C6FFD9954F38C54DAA601 /* PhoneFlowTests.swift in Sources */,
 				E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -320,6 +327,7 @@
 				D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */,
 				26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */,
 				CAB621B05001EBA1CD73AD64 /* Pay.swift in Sources */,
+				8E9D209734E87C4925468E05 /* PhonesView.swift in Sources */,
 				789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */,
 				B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */,
 				6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */,
