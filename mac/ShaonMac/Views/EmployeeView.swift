@@ -8,6 +8,7 @@ struct EmployeeView: View {
     @State private var inspectorOpen = false
     @State private var editingEmployee = false
     @State private var confirmDelete: [String]?
+    @State private var pairing = false
 
     var body: some View {
         if let emp = model.emp(empId) {
@@ -34,6 +35,7 @@ struct EmployeeView: View {
             }
             .onChange(of: selection) { _, new in inspectorOpen = new.count == 1 }
             .sheet(isPresented: $editingEmployee) { EmployeeEditor(emp: emp) }
+            .sheet(isPresented: $pairing) { PairSheet(emp: emp) }
             .confirmationDialog("למחוק \(confirmDelete?.count ?? 0) משמרות?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
                 Button("מחיקה", role: .destructive) { let ids = confirmDelete ?? []; selection = []; Task { await model.deleteShifts(ids) } }
             } message: { Text("אפשר לבטל עם ⌘Z.") }
@@ -52,6 +54,11 @@ struct EmployeeView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
+            let phones = model.devices(of: emp.id)
+            Button { pairing = true } label: {
+                Label(phones.isEmpty ? "חיבור טלפון" : "טלפון מחובר", systemImage: phones.isEmpty ? "qrcode" : "iphone.gen3")
+            }
+            .help(phones.isEmpty ? "חיבור הטלפון של העובדת, כדי שתסמן כניסה ויציאה בעצמה" : (phones.compactMap(\.model).joined(separator: ", ")))
             Button { editingEmployee = true } label: { Label("עריכה", systemImage: "pencil") }
         }
         .padding([.horizontal, .top], 16).padding(.bottom, 4)
@@ -62,16 +69,27 @@ struct EmployeeView: View {
             TableColumn("תאריך", value: \.date) { s in Text("\(fmtDayMonth(s.date)) · \(fmtWeekday(s.date))").monospacedDigit() }
             TableColumn("שעות") { s in
                 HStack(spacing: 4) {
-                    Text("\(model.fmt(s.in)) – \(model.fmt(s.out))").monospacedDigit()
+                    if s.isOpen {
+                        Text("\(model.fmt(s.in)) –").monospacedDigit()
+                        Text("במשמרת עכשיו").foregroundStyle(.green).fontWeight(.semibold)
+                    } else {
+                        Text("\(model.fmt(s.in)) – \(model.fmt(s.out))").monospacedDigit()
+                    }
+                    if s.fromPhone { Image(systemName: "iphone.gen3").foregroundStyle(.secondary).help("נרשם מהטלפון של העובדת") }
+                    if s.fixedBy != nil { Image(systemName: "pencil.circle").foregroundStyle(.secondary).help("תוקן לפי בקשה שאישרת") }
+                    if let g = s.clockGapMinutes, g > 10 {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                            .help("השעה נרשמה בטלפון \(Int(g)) דקות לפני שהגיעה לשרת. זה קורה כשאין קליטה, או כשהשעון בטלפון לא נכון. כדאי לוודא.")
+                    }
                     if isOvernight(s.in, s.out) { Image(systemName: "moon.fill").foregroundStyle(.indigo).help("משמרת לילה") }
                     if s.special?.rate != nil { Image(systemName: "star.fill").foregroundStyle(.orange).help("תעריף מיוחד") }
                 }
             }
-            TableColumn("סה״כ") { s in Text(fmtHM(shiftMinutes(s.in, s.out))).monospacedDigit() }.width(60)
-            TableColumn("סכום") { s in Text(fmtMoney(model.pay(s))).monospacedDigit().fontWeight(.medium) }.width(90)
+            TableColumn("סה״כ") { s in Text(s.isOpen ? "—" : fmtHM(shiftMinutes(s.in, s.out))).monospacedDigit() }.width(60)
+            TableColumn("סכום") { s in Text(s.isOpen ? "—" : fmtMoney(model.pay(s))).monospacedDigit().fontWeight(.medium) }.width(90)
             TableColumn("שולם") { s in
                 Toggle("שולם", isOn: Binding(get: { s.isPaid }, set: { v in Task { await model.setPaid([s.id], paid: v) } }))
-                    .labelsHidden().toggleStyle(.checkbox)
+                    .labelsHidden().toggleStyle(.checkbox).disabled(s.isOpen && !s.isPaid)
             }.width(60)
         }
         .contextMenu(forSelectionType: String.self) { ids in
@@ -95,8 +113,9 @@ struct EmployeeView: View {
             Spacer()
             stat("שעות", fmtHM(a.minutes))
             stat("משמרות", "\(a.shifts.count)")
-            if a.shifts.contains(where: { !$0.isPaid }) {
-                Button { let ids = a.shifts.filter { !$0.isPaid }.map(\.id); Task { await model.setPaid(ids, paid: true) } } label: { Label("סימון הכל כשולם", systemImage: "checkmark") }
+            if a.shifts.contains(where: { !$0.isPaid && !$0.isOpen }) {
+                Button { let ids = a.shifts.filter { !$0.isPaid && !$0.isOpen }.map(\.id); Task { await model.setPaid(ids, paid: true) } } label: { Label("סימון הכל כשולם", systemImage: "checkmark") }
+                    .help("משמרת שעדיין פעילה לא מסומנת")
             }
         }
         .padding(16)
