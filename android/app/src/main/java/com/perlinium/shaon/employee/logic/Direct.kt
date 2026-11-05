@@ -7,15 +7,18 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 /*
- * Which changes the phone saves right away, and which go to the manager for approval
+ * Which changes the phone saves right away (the manager gets a notice), and which go to him for approval
  * (the same limits are enforced by firestore.rules):
  *   - a forgotten shift, typed in on the day it ended
- *   - a clock-in or clock-out moved EARLIER (she remembered later that she came / left earlier),
- *     while the shift is running or on the day it ended
- * Anything else (a later time, an older day) is a request.
+ *   - changing the clock-in or clock-out, earlier or later, of a running shift or one that ended today;
+ *     a shift left open since an earlier day can be clocked out at the time she really left
+ *   - at most MAX_PHONE_EDITS such changes per shift
+ * Anything else (an older day, a third change, a shift the manager entered) is a request.
  */
 
 const val MAX_EARLIER_IN_MS = 12 * 3600_000L
+const val MAX_SPAN_MS = 24 * 3600_000L
+const val MAX_PHONE_EDITS = 2
 
 /** Local time [time] on [date] as ms since 1970. */
 fun localMillis(date: String, time: String, zone: ZoneId = zone()): Long =
@@ -44,26 +47,28 @@ fun directAdd(date: String, tin: String, tout: String, now: Long, zone: ZoneId =
 
 /**
  * New times for an existing shift (newOut "" = a running shift keeps running).
- * Saved right away only if every change moves a time earlier. null = needs approval.
+ * Saved right away if the shift is running or ended today, nothing is in the future,
+ * and she changed it less than [MAX_PHONE_EDITS] times. null = needs approval.
  */
 fun directFix(s: Shift, newIn: String, newOut: String, now: Long, zone: ZoneId = zone()): Direct? {
     val oldInAt = s.inAt ?: return null
-    if (s.paid || s.source != "phone" || newIn.isEmpty()) return null
+    if (s.paid || s.source != "phone" || newIn.isEmpty() || s.edits >= MAX_PHONE_EDITS) return null
     val inAt = if (newIn == s.`in`) oldInAt else localMillis(s.date, newIn, zone)
-    if (inAt > oldInAt || inAt <= oldInAt - MAX_EARLIER_IN_MS) return null
+    if (inAt <= oldInAt - MAX_EARLIER_IN_MS || inAt > now) return null
 
     fun outMs(t: String): Long { var b = localMillis(s.date, t, zone); if (b <= inAt) b = spanMillis(s.date, newIn, t, zone).second; return b }
+    fun ok(outAt: Long) = outAt > inAt && outAt <= now && outAt - inAt <= MAX_SPAN_MS
 
     if (s.open) {
-        if (newOut.isEmpty()) return if (inAt < oldInAt) Direct(inAt, null) else null
+        if (newOut.isEmpty()) return if (inAt != oldInAt) Direct(inAt, null) else null
         val outAt = outMs(newOut)                       // clocking out at the time she really left
-        return if (outAt in (inAt + 1)..now) Direct(inAt, outAt) else null
+        return if (ok(outAt)) Direct(inAt, outAt) else null
     }
     val oldOutAt = s.outAt ?: return null
     if (newOut.isEmpty() || dayOf(oldOutAt, zone) != dayOf(now, zone)) return null   // only on the day it ended
     val outAt = if (newOut == s.out) oldOutAt else outMs(newOut)
-    if (outAt > oldOutAt || outAt <= inAt) return null
-    return if (inAt < oldInAt || outAt < oldOutAt) Direct(inAt, outAt) else null
+    if (!ok(outAt)) return null
+    return if (inAt != oldInAt || outAt != oldOutAt) Direct(inAt, outAt) else null
 }
 
 /** True if [a, b] overlaps any of the other shifts (open ones run until [now]). */

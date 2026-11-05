@@ -99,12 +99,19 @@ final class AppModel {
     func describe(_ n: Notice) -> (title: String, detail: String) {
         let name = emp(n.empId)?.name ?? "עובדת"
         let day = "\(fmtWeekday(n.date)) \(fmtDayMonth(n.date))"
-        let span = n.out.isEmpty ? "כניסה ב-\(fmt(n.in)), עדיין במשמרת" : "\(fmt(n.in))–\(fmt(n.out)) · \(fmtHM(shiftMinutes(n.in, n.out))) שעות"
+        let hours = { (a: String, b: String) in fmtHM(shiftMinutes(a, b)) }
+        let span = n.out.isEmpty ? "כניסה ב-\(fmt(n.in)), עדיין במשמרת" : "\(fmt(n.in))–\(fmt(n.out)) · \(hours(n.in, n.out)) שעות"
         let movedIn = n.movedIn ? "כניסה \(fmt(n.in)) במקום \(fmt(n.prevIn ?? ""))" : nil
         let movedOut = n.movedOut ? "יציאה \(fmt(n.out)) במקום \(fmt(n.prevOut ?? ""))" : nil
-        if n.type == "manual" { return ("\(name) הזינה שעות", "\(day) · \(span)") }
-        if n.closedShift { return ("\(name) רשמה שעת יציאה", ([day, span] + [movedIn].compactMap { $0 }).joined(separator: " · ")) }
-        return ("\(name) תיקנה שעה", ([day] + [movedIn, movedOut].compactMap { $0 }).joined(separator: " · "))
+        let second = n.edit == 2 ? "שינוי שני במשמרת הזו" : nil
+        let line = { (parts: [String?]) in parts.compactMap { $0 }.joined(separator: " · ") }
+        if n.type == "manual" { return ("\(name) הזינה שעות", line([day, span])) }
+        if n.closedShift { return ("\(name) רשמה שעת יציאה", line([day, span, movedIn, second])) }
+        if n.out.isEmpty { return ("\(name) שינתה שעת כניסה", line([day, movedIn, "עדיין במשמרת", second])) }
+        // A finished shift: what changed, and the total before and after (that's what changes the pay).
+        var total: String?
+        if let pi = n.prevIn, let po = n.prevOut, !po.isEmpty { total = "סה״כ \(hours(n.in, n.out)) שעות במקום \(hours(pi, po))" }
+        return ("\(name) שינתה שעות", line([day, movedIn, movedOut, total, second]))
     }
     func markNoticesSeen() async {
         let ids = unseenNotices.map(\.id)

@@ -47,14 +47,15 @@ class DirectTest {
         assertNull("missing time", directAdd(today, "", "12:00", now, zone))
     }
 
-    // Still at work, remembered she came in earlier
+    // Still at work, fixing the clock-in
 
-    @Test fun earlierClockInKeepsShiftRunning() {
+    @Test fun earlierOrLaterClockInKeepsShiftRunning() {
         assertEquals(Direct(at(today, "07:40"), null), fix(open(), "07:40", ""))
+        assertEquals(Direct(at(today, "08:20"), null), fix(open(), "08:20", ""))
     }
 
-    @Test fun laterOrSameClockInNeedsApproval() {
-        assertNull(fix(open(), "08:20", ""))
+    @Test fun clockInNotInTheFutureAndNotUnchanged() {
+        assertNull(fix(open(), "18:30", ""))
         assertNull("nothing changed", fix(open(), "08:00", ""))
     }
 
@@ -80,7 +81,12 @@ class DirectTest {
         assertEquals(Direct(at(yesterday, "22:00"), at(today, "06:00")), fix(s, "22:00", "06:00"))
     }
 
-    // Shift that ended today: times moved earlier
+    @Test fun closesShiftLeftOpenSinceAnEarlierDay() {
+        val s = open(date = "2026-11-02", tin = "08:00")
+        assertEquals(Direct(at("2026-11-02", "08:00"), at("2026-11-02", "16:00")), fix(s, "08:00", "16:00"))
+    }
+
+    // Shift that ended today: either time, earlier or later
 
     @Test fun earlierClockOutOrClockInIsSaved() {
         assertEquals(Direct(at(today, "08:00"), at(today, "15:30")), fix(closed(), "08:00", "15:30"))
@@ -88,12 +94,23 @@ class DirectTest {
         assertEquals(Direct(at(today, "07:30"), at(today, "15:30")), fix(closed(), "07:30", "15:30"))
     }
 
-    @Test fun laterTimesNeedApproval() {
-        assertNull(fix(closed(), "08:00", "16:30"))
-        assertNull(fix(closed(), "07:30", "16:30"))
-        assertNull(fix(closed(), "08:30", "16:00"))
+    @Test fun laterTimesAreSavedToo() {
+        assertEquals(Direct(at(today, "08:00"), at(today, "16:30")), fix(closed(), "08:00", "16:30"))
+        assertEquals(Direct(at(today, "07:30"), at(today, "16:30")), fix(closed(), "07:30", "16:30"))
+        assertEquals(Direct(at(today, "08:30"), at(today, "16:00")), fix(closed(), "08:30", "16:00"))
+    }
+
+    @Test fun notInTheFutureUnchangedOrReopened() {
+        assertNull("leaves later than now", fix(closed(), "08:00", "18:30"))
         assertNull("nothing changed", fix(closed(), "08:00", "16:00"))
         assertNull("cannot reopen it", fix(closed(), "08:00", ""))
+    }
+
+    @Test fun twoChangesPerShiftThenApproval() {
+        assertEquals(Direct(at(today, "08:00"), at(today, "16:30")), fix(closed().copy(edits = 1), "08:00", "16:30"))
+        assertNull(fix(closed().copy(edits = 2), "08:00", "16:30"))
+        assertNull(fix(open().copy(edits = 2), "07:40", ""))
+        assertNull(fix(open().copy(edits = 2), "08:00", "17:00"))
     }
 
     @Test fun shiftThatEndedYesterdayNeedsApproval() {

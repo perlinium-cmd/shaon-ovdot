@@ -39,7 +39,8 @@ struct Shift: Codable, Identifiable, Equatable {
     var fixedBy: String?      // id of the approved request that last changed this shift
     var requestId: String?    // for a shift added from a request
     var manual: Bool?         // typed in on the phone after the shift (same day, no approval needed)
-    var edited: Bool?         // a time was moved earlier on the phone (no approval needed)
+    var edited: Bool?         // a time was changed on the phone on the day (no approval needed)
+    var edits: Int?           // how many such changes (the phone allows two, then asks for approval)
     var isPaid: Bool { paid == true }
     var isOpen: Bool { open == true }
     var fromPhone: Bool { source == "phone" }
@@ -88,7 +89,7 @@ struct ShiftRequest: Codable, Identifiable, Equatable {
 }
 
 /// Something the phone saved without asking (users/{uid}/notices/{id}), so the manager hears about it:
-/// a forgotten shift typed in on the day it ended ("manual"), or a clock-in / clock-out moved earlier ("fix").
+/// a forgotten shift typed in on the day it ended ("manual"), or a clock-in / clock-out changed on the day ("fix").
 /// The phone can add these but never read them (firestore.rules).
 struct Notice: Codable, Identifiable, Equatable {
     var id: String = ""
@@ -100,6 +101,7 @@ struct Notice: Codable, Identifiable, Equatable {
     var out: String           // "" = the shift is still running
     var prevIn: String?       // "fix": the times before the change
     var prevOut: String?      // "" = it was still running
+    var edit: Int?            // "fix": 1st or 2nd change of this shift
     var createdAt: Double?
     var deviceId: String?
     var seen: Bool?

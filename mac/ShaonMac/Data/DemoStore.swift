@@ -112,13 +112,13 @@ final class DemoStore: DataStore {
         notices[nid] = Notice(id: nid, empId: empId, type: "manual", shiftId: id, date: date, in: tin, out: tout, createdAt: Date().timeIntervalSince1970 * 1000)
         notify(); return id
     }
-    /// The phone moving a clock-in / clock-out earlier (out "" = a running shift keeps running).
-    func simulateEarlierFix(_ id: String, in tin: String, out tout: String) {
+    /// The phone changing a clock-in / clock-out on the day (out "" = a running shift keeps running).
+    func simulateFix(_ id: String, in tin: String, out tout: String) {
         guard var s = shifts[id] else { return }
-        let nid = newId()
+        let nid = newId(), edit = (s.edits ?? 0) + 1
         notices[nid] = Notice(id: nid, empId: s.empId, type: "fix", shiftId: id, date: s.date, in: tin, out: tout, prevIn: s.in, prevOut: s.out,
-                              createdAt: Date().timeIntervalSince1970 * 1000)
-        s.in = tin; s.inAt = localMillis(date: s.date, time: tin); s.edited = true
+                              edit: edit, createdAt: Date().timeIntervalSince1970 * 1000)
+        s.in = tin; s.inAt = localMillis(date: s.date, time: tin); s.edited = true; s.edits = edit
         if !tout.isEmpty { s.out = tout; s.outAt = localMillis(date: s.date, time: tout); s.open = false }
         shifts[id] = s; notify()
     }

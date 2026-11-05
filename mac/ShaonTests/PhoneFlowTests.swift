@@ -155,36 +155,41 @@ final class PhoneFlowTests: XCTestCase {
         XCTAssertEqual(m.notices.count, 1, "seen updates stay on the list")
     }
 
-    func testEarlierTimesDescribeWhatChanged() async throws {
+    func testSameDayChangesDescribeWhatChanged() async throws {
         let (m, store) = model()
         let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 40))
         let today = todayStr()
-        // Still at work, remembered she came in earlier.
+        // Still at work, fixed the clock-in.
         let open = store.simulateClockIn(empId: empId, date: today, time: "08:10")
-        store.simulateEarlierFix(open, in: "07:50", out: "")
+        store.simulateFix(open, in: "07:50", out: "")
         await settle()
         var d = m.describe(m.notices[0])
-        XCTAssertEqual(d.title, "נועה תיקנה שעה")
+        XCTAssertEqual(d.title, "נועה שינתה שעת כניסה")
         XCTAssertTrue(d.detail.contains("כניסה 07:50 במקום 08:10"), d.detail)
         XCTAssertEqual(m.openShift(of: empId)?.in, "07:50")
         XCTAssertNil(m.openShift(of: empId)?.clockGapMinutes)
-        // Forgot to clock out: records when she really left.
+        // Forgot to clock out: records when she really left (her 2nd change of this shift).
         try await Task.sleep(for: .milliseconds(5))
-        store.simulateEarlierFix(open, in: "07:50", out: "12:00")
+        store.simulateFix(open, in: "07:50", out: "12:00")
         await settle()
         d = m.describe(m.notices[0])
         XCTAssertEqual(d.title, "נועה רשמה שעת יציאה")
         XCTAssertTrue(d.detail.contains("07:50–12:00"), d.detail)
+        XCTAssertTrue(d.detail.contains("שינוי שני"), d.detail)
         XCTAssertNil(m.openShift(of: empId))
-        // Left earlier than she clocked out.
+        // A finished shift, exit moved later: says what changed and the total before and after.
         let done = store.simulateClockIn(empId: empId, date: today, time: "13:00")
         store.simulateClockOut(done, time: "17:00")
         try await Task.sleep(for: .milliseconds(5))
-        store.simulateEarlierFix(done, in: "13:00", out: "16:40")
+        store.simulateFix(done, in: "13:00", out: "17:30")
         await settle()
         d = m.describe(m.notices[0])
-        XCTAssertTrue(d.detail.contains("יציאה 16:40 במקום 17:00"), d.detail)
+        XCTAssertEqual(d.title, "נועה שינתה שעות")
+        XCTAssertTrue(d.detail.contains("יציאה 17:30 במקום 17:00"), d.detail)
+        XCTAssertTrue(d.detail.contains("סה״כ 4:30 שעות במקום 4:00"), d.detail)
         XCTAssertFalse(d.detail.contains("כניסה"), d.detail)
+        XCTAssertFalse(d.detail.contains("שינוי שני"), d.detail)
+        XCTAssertEqual(m.shifts?.first { $0.id == done }?.edits, 1)
         XCTAssertEqual(m.unseenNotices.count, 3)
     }
 

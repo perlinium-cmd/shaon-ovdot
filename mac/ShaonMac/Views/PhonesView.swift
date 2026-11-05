@@ -67,7 +67,7 @@ struct RequestsView: View {
                 if !model.notices.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("עדכונים מהטלפון").font(.headline)
-                        Text("שעות שהעובדות הזינו בעצמן באותו יום, או הקדימו. הן נשמרו בלי אישור. אם משהו לא נכון, אפשר לתקן בדף של העובדת.")
+                        Text("שעות שהעובדות הזינו או שינו בעצמן באותו יום. הן נשמרו בלי אישור (עד שני שינויים בכל משמרת, מהשלישי צריך את האישור שלך). אם משהו לא נכון, אפשר לתקן בדף של העובדת.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     .padding(.top, 12)

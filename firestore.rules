@@ -193,25 +193,28 @@ service cloud.firestore {
         && withNotice(owner, shiftId, d);
     }
 
-    // She remembered a little later that she came in, or left, earlier than she pressed. Moving a time
-    // earlier is saved without approval; a later time, or an older shift, still needs a request.
-    function earlierFix(owner, shiftId, b, a) {
+    // She changes the times of her own shift on the day: a running shift, or one that ended today
+    // (the app allows today only; the 48 hours here leave room for a phone that was offline).
+    // Earlier or later, saved without approval, at most twice per shift (`edits`); after that, a request.
+    function phoneFix(owner, shiftId, b, a) {
       return a.edited == true
+        && a.edits == b.get('edits', 0) + 1 && a.edits <= 2
         && a.noticeId != b.get('noticeId', '') && withNotice(owner, shiftId, a)
         && isTime(a.in) && a.inAt is number
-        && a.inAt <= b.inAt && a.inAt > b.inAt - 12 * 3600000
+        && a.inAt > b.inAt - 12 * 3600000 && a.inAt < nowMs() + 3600000
         && (a.inAt != b.inAt || a.in == b.in)
         && (
-          // still running, clock-in moved earlier
-          (b.open == true && a.open == true && a.out == '' && !('outAt' in a) && a.inAt < b.inAt)
-          // clocking out now, at the time she really left
+          // still running, clock-in changed
+          (b.open == true && a.open == true && a.out == '' && !('outAt' in a) && a.inAt != b.inAt)
+          // clocking out, at the time she really left (also a shift left open since an earlier day)
           || (b.open == true && a.open == false && isTime(a.out) && a.outAt is number
-              && a.outAt > a.inAt && a.outAt < nowMs() + 3600000 && a.outSyncedAt == request.time)
-          // a finished shift, shortly after it ended: earlier clock-in and/or earlier clock-out
+              && a.outAt > a.inAt && a.outAt - a.inAt <= 24 * 3600000 && a.outAt < nowMs() + 3600000
+              && a.outSyncedAt == request.time)
+          // a shift that ended today: clock-in and/or clock-out changed
           || (b.open == false && a.open == false && isTime(a.out) && a.outAt is number
-              && a.outAt <= b.outAt && a.outAt > a.inAt
+              && a.outAt > a.inAt && a.outAt - a.inAt <= 24 * 3600000 && a.outAt < nowMs() + 3600000
               && (a.outAt != b.outAt || a.out == b.out)
-              && (a.inAt < b.inAt || a.outAt < b.outAt)
+              && (a.inAt != b.inAt || a.outAt != b.outAt)
               && b.outAt > hoursAgo(48))
         );
     }
@@ -226,8 +229,8 @@ service cloud.firestore {
         && (
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['out', 'outAt', 'outSyncedAt', 'open'])
             && (clockOut(resource.data, request.resource.data) || undoClockOut(resource.data, request.resource.data)))
-          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['in', 'inAt', 'out', 'outAt', 'outSyncedAt', 'open', 'edited', 'noticeId'])
-            && earlierFix(owner, shiftId, resource.data, request.resource.data))
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['in', 'inAt', 'out', 'outAt', 'outSyncedAt', 'open', 'edited', 'edits', 'noticeId'])
+            && phoneFix(owner, shiftId, resource.data, request.resource.data))
         );
       // "Undo" right after clocking in: only a phone shift that is still open and a few minutes old.
       allow delete: if ofMyEmp(owner, resource.data)
@@ -239,13 +242,14 @@ service cloud.firestore {
 
     match /users/{owner}/notices/{noticeId} {
       allow create: if ofMyEmp(owner, request.resource.data)
-        && request.resource.data.keys().hasOnly(['empId', 'type', 'shiftId', 'date', 'in', 'out', 'prevIn', 'prevOut', 'createdAt', 'deviceId'])
+        && request.resource.data.keys().hasOnly(['empId', 'type', 'shiftId', 'date', 'in', 'out', 'prevIn', 'prevOut', 'edit', 'createdAt', 'deviceId'])
         && request.resource.data.keys().hasAll(['empId', 'type', 'shiftId', 'date', 'in', 'out', 'createdAt', 'deviceId'])
         && request.resource.data.type in ['manual', 'fix']
         && request.resource.data.createdAt == request.time
         && request.resource.data.deviceId == request.auth.uid
         && isDate(request.resource.data.date) && isTime(request.resource.data.in)
         && (isTime(request.resource.data.out) || request.resource.data.out == '')
+        && (!('edit' in request.resource.data) || request.resource.data.edit is int)
         && request.resource.data.shiftId is string
         && getAfter(/databases/$(database)/documents/users/$(owner)/shifts/$(request.resource.data.shiftId)).data.get('noticeId', '') == noticeId;
     }

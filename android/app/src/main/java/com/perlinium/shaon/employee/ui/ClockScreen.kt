@@ -174,7 +174,7 @@ fun ClockScreen(
             if (mins >= 10 * 60) LongShiftCard(mins) { onRequest(s) }
             if (s.pending) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { OfflineNote() }
             if (mins < 10 * 60) TextButton(onClick = { onRequest(s) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("נכנסת קודם? תיקון שעת הכניסה", style = MaterialTheme.typography.labelLarge)
+                Text("תיקון שעת הכניסה", style = MaterialTheme.typography.labelLarge)
             }
         }
 

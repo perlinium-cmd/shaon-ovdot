@@ -345,21 +345,23 @@ object Repo {
         return true
     }
 
-    /** Clock-in and/or clock-out moved earlier. A running shift either keeps running or is clocked out at [newOut]. */
-    fun fixEarlier(shift: Shift, newIn: String, newOut: String, d: Direct): Boolean {
+    /** Clock-in and/or clock-out changed on the day. A running shift either keeps running or is clocked out at [newOut]. */
+    fun fixShift(shift: Shift, newIn: String, newOut: String, d: Direct): Boolean {
         val s = session.value ?: return false
         val ref = db.document("${base(s)}/shifts/${shift.id}")
         val notice = db.collection("${base(s)}/notices").document()
-        val change = mutableMapOf<String, Any>("edited" to true, "noticeId" to notice.id)
+        val edit = shift.edits + 1
+        // increment: two changes saved offline still count one after the other on the server
+        val change = mutableMapOf<String, Any>("edited" to true, "edits" to FieldValue.increment(1), "noticeId" to notice.id)
         if (newIn != shift.`in`) { change["in"] = newIn; change["inAt"] = d.inAt }
         val closes = shift.open && d.outAt != null
         if (d.outAt != null && (shift.open || newOut != shift.out)) { change["out"] = newOut; change["outAt"] = d.outAt }
         if (closes) { change["outSyncedAt"] = FieldValue.serverTimestamp(); change["open"] = false }
-        if (shift.open) openShift.value = if (closes) null else shift.copy(`in` = newIn, inAt = d.inAt)   // instant UI
+        if (shift.open) openShift.value = if (closes) null else shift.copy(`in` = newIn, inAt = d.inAt, edits = edit)   // instant UI
         db.batch().apply {
             update(ref, change)
             set(notice, noticeData(s, "fix", shift.id, shift.date, newIn, if (closes || !shift.open) newOut else "").apply {
-                put("prevIn", shift.`in`); put("prevOut", shift.out)
+                put("prevIn", shift.`in`); put("prevOut", shift.out); put("edit", edit)
             })
         }.commit().addOnFailureListener(fail("המשמרת"))
         return true

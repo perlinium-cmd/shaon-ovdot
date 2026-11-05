@@ -54,7 +54,9 @@ import com.perlinium.shaon.employee.logic.directAdd
 import com.perlinium.shaon.employee.logic.directFix
 import com.perlinium.shaon.employee.logic.fmtHM
 import com.perlinium.shaon.employee.logic.fmtLongDate
+import com.perlinium.shaon.employee.logic.MAX_PHONE_EDITS
 import com.perlinium.shaon.employee.logic.isOvernight
+import com.perlinium.shaon.employee.logic.localMillis
 import com.perlinium.shaon.employee.logic.overlapsAny
 import com.perlinium.shaon.employee.logic.parseDate
 import com.perlinium.shaon.employee.logic.shiftMinutes
@@ -101,7 +103,9 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onDone: (String, Boolean) -
         ) {
             Text(if (isFix) "תיקון משמרת" else "הוספת משמרת", style = MaterialTheme.typography.headlineSmall)
             if (needsApproval) {
-                Text("השעות ישתנו רק אחרי שהמנהל יאשר.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val why = if (isFix && shift!!.edits >= MAX_PHONE_EDITS) "כבר שינית את המשמרת הזו פעמיים, אז מעכשיו השעות ישתנו רק אחרי שהמנהל יאשר."
+                          else "השעות ישתנו רק אחרי שהמנהל יאשר."
+                Text(why, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             Field("יום", fmtLongDate(parseDate(date)), enabled = !isFix) { picking = "date" }
@@ -128,21 +132,24 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onDone: (String, Boolean) -
             Button(
                 onClick = {
                     val endAt = if (tin.isNotEmpty() && tout.isNotEmpty() && tin != tout) spanMillis(date, tin, tout).second else null
+                    val startAt = if (tin.isNotEmpty()) direct?.inAt ?: localMillis(date, tin) else null
+                    val others = sameDays(date).filter { it.id != shift?.id }
                     error = when {
                         tin.isEmpty() -> "צריך לבחור שעת כניסה"
                         !running && tout.isEmpty() -> "צריך לבחור שעת יציאה"
                         tout.isNotEmpty() && tin == tout -> "שעת היציאה זהה לשעת הכניסה"
                         parseDate(date).isAfter(LocalDate.now()) -> "אי אפשר לבקש על יום שעוד לא הגיע"
                         unchanged -> "לא שינית אף שעה"
+                        startAt != null && startAt > now + 60_000 -> "שעת הכניסה עוד לא הגיעה"
                         endAt != null && endAt > now + 60_000 -> "שעת היציאה עוד לא הגיעה"
-                        !isFix && direct != null && overlapsAny(direct.inAt, direct.outAt!!, sameDays(date), now) -> "בשעות האלה כבר רשומה משמרת"
+                        direct != null && overlapsAny(direct.inAt, direct.outAt ?: now, others, now) -> "בשעות האלה כבר רשומה משמרת"
                         else -> null
                     }
                     if (error == null) {
                         view.confirmTick()
                         val saved = when {
                             direct == null -> false
-                            isFix -> Repo.fixEarlier(shift!!, tin, tout, direct)
+                            isFix -> Repo.fixShift(shift!!, tin, tout, direct)
                             else -> Repo.addManualShift(date, tin, tout, direct)
                         }
                         if (saved) onDone(if (tout.isEmpty()) "נשמר: כניסה ב-$tin" else "נשמר: $tin–$tout", false)
