@@ -25,7 +25,14 @@ struct ShaonApp: App {
             .environment(\.layoutDirection, .rightToLeft)
             .frame(minWidth: 900, minHeight: 620)
             .tint(Color(red: 0.06, green: 0.46, blue: 0.43))
-            .onOpenURL { _ = GIDSignIn.sharedInstance.handle($0) }
+            .onOpenURL { url in
+                if url.scheme == "shaon" {
+                    // Widget tap: widgets always show the current month.
+                    model?.month = currentMonth()
+                    NotificationCenter.default.post(name: .openRoute, object: url)
+                } else { _ = GIDSignIn.sharedInstance.handle(url) }
+            }
+            .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .commands {
             CommandGroup(replacing: .newItem) {

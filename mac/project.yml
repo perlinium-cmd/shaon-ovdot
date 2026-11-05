@@ -10,6 +10,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: J4NT95YV4X
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
@@ -21,8 +22,9 @@ targets:
   ShaonMac:
     type: application
     platform: macOS
-    sources: [ShaonMac]
+    sources: [ShaonMac, Shared]
     dependencies:
+      - target: ShaonWidgets
       - package: Firebase
         product: FirebaseAuth
       - package: Firebase
@@ -34,12 +36,13 @@ targets:
       properties:
         CFBundleURLTypes:
           - CFBundleURLSchemes: ["com.googleusercontent.apps.999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2"]
+          - CFBundleURLSchemes: ["shaon"]
+        ShaonAppGroup: "$(TeamIdentifierPrefix)com.perlinium.shaon"
         GIDClientID: "999670608252-rmb17o1vc8a4ndv95b3s9n46gk0bclp2.apps.googleusercontent.com"
     settings:
       base:
         PRODUCT_NAME: ShaonMac
         PRODUCT_BUNDLE_IDENTIFIER: com.perlinium.shaon
-        DEVELOPMENT_TEAM: J4NT95YV4X
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: "שעון עובדות"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.business
@@ -47,6 +50,31 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ShaonMac/ShaonMac.entitlements
+  ShaonWidgets:
+    type: app-extension
+    platform: macOS
+    sources:
+      - ShaonWidgets
+      - Shared
+      - ShaonMac/Models/Models.swift
+      - ShaonMac/Logic/Pay.swift
+      - ShaonMac/Logic/Formatting.swift
+      - ShaonMac/Logic/TimeParse.swift
+    info:
+      path: ShaonWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: "שעון עובדות"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        ShaonAppGroup: "$(TeamIdentifierPrefix)com.perlinium.shaon"
+    settings:
+      base:
+        PRODUCT_NAME: ShaonWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.perlinium.shaon.widgets
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: ShaonWidgets/ShaonWidgets.entitlements
+        SKIP_INSTALL: YES
   ShaonTests:
     type: bundle.unit-test
     platform: macOS
@@ -65,3 +93,6 @@ schemes:
       targets: { ShaonMac: all }
     test:
       targets: [ShaonTests]
+      # The test host must never open the real Firestore store (it shares the container with the installed app).
+      commandLineArguments:
+        "-demo": true
