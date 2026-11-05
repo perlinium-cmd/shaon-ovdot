@@ -213,6 +213,7 @@ const timeFieldHTML = (key, label) => `
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
 
 /* =========================================================
    State
@@ -718,6 +719,7 @@ const EmployeeView = {
     this.built = false;
     this.payments = [];
     this.showAllPays = false;
+    this.draftChecked = false;
     this.unsubPay?.();
     this.unsubPay = state.store.watchPayments(id, (list) => { this.payments = list; if (this.built) this.renderPayments(); }, onDataError);
     this.update();
@@ -739,6 +741,7 @@ const EmployeeView = {
     }
     if (!this.built) this.build();
     else if (this.fmt12 !== is12()) this.renderTimeFields();
+    if (!this.draftChecked) { this.draftChecked = true; this.restoreDraft(); }
     this.renderHead();
     this.renderList();
     this.renderPreview();
@@ -809,6 +812,7 @@ const EmployeeView = {
         </div>
       </div>`;
     $('#note-toggle').addEventListener('click', () => { this.setNote(''); $('#note-wrap').hidden = false; $('#note-toggle').hidden = true; $('#f-note').focus(); });
+    $('#f-note').addEventListener('input', () => this.saveDraft());
 
     const f = $('#entry');
     this.fDate = $('#f-date');
@@ -835,6 +839,30 @@ const EmployeeView = {
     [this.fDate, this.fIn, this.fOut].forEach((i) => i.removeAttribute('aria-invalid'));
     this.syncChips();
     this.renderPreview();
+    this.saveDraft();
+  },
+
+  /* ----- draft: a half-filled form survives the app closing or the device turning off (kept 12 hours) ----- */
+  draftKey() { return `draft-${this.id}`; },
+  saveDraft() {
+    // draftChecked: don't overwrite a saved draft while the form is still being built, before it was restored
+    if (!this.built || !this.draftChecked || this.form.editingId || this.restoring) return;
+    const note = $('#f-note')?.value.trim() || '';
+    const { date, in: tin, out: tout } = this.form;
+    if (!tin && !tout && !note) { lsDel(this.draftKey()); return; }
+    lsSet(this.draftKey(), JSON.stringify({ date, in: tin, out: tout, note, t: Date.now() }));
+  },
+  clearDraft() { lsDel(this.draftKey()); },
+  restoreDraft() {
+    let d = null;
+    try { d = JSON.parse(lsGet(this.draftKey()) || 'null'); } catch { /* ignore */ }
+    if (!d || !(Date.now() - d.t < 12 * 3600 * 1000)) { this.clearDraft(); return; }
+    this.restoring = true;
+    if (d.date) { this.form.date = d.date; this.fDate.value = d.date; }
+    this.setTime('in', d.in || ''); this.setTime('out', d.out || '');
+    this.setNote(d.note || '');
+    this.restoring = false;
+    this.syncChips();
   },
 
   /* ----- special rate (manual amount per shift) ----- */
@@ -951,6 +979,7 @@ const EmployeeView = {
     $('#entry-err').textContent = '';
     this.fIn?.removeAttribute('aria-invalid'); this.fOut?.removeAttribute('aria-invalid');
     this.renderPreview();
+    this.saveDraft();
   },
 
   syncChips() {
@@ -1190,6 +1219,7 @@ const EmployeeView = {
         await state.store.addShift({ empId: this.id, date, month, in: tin, out: tout, rate: effRate(this.emp()), special, note, paid: false });
         toast(`נשמר: ${fmtDayMonth(date)} · ${fmtHM(shiftMinutes(tin, tout))} שעות`);
       }
+      this.clearDraft();
       lsSet(`last-${this.id}`, `${tin}-${tout}`);
       this.setTime('in', ''); this.setTime('out', '');
       this.setSpecial(null);
@@ -1897,6 +1927,15 @@ async function main() {
     return;
   }
   $('#demo-banner').hidden = !state.store.demo;
+  // A write that was saved on the device but later refused by the server (rare): say so instead of hiding it.
+  state.store.onLateError = (e) => {
+    if (e?.code === 'permission-denied') onDataError(e);
+    else { console.error(e); toast('שינוי אחד לא הסתנכרן לשרת – כדאי לבדוק את הרשימה', { error: true }); }
+  };
+  const syncOnline = () => { $('#offline-banner').hidden = navigator.onLine; };
+  window.addEventListener('online', syncOnline);
+  window.addEventListener('offline', syncOnline);
+  syncOnline();
 
   $('#btn-signin').addEventListener('click', async () => {
     const btn = $('#btn-signin');
@@ -1931,6 +1970,11 @@ async function main() {
     subscribeAll();
     route();
   });
+}
+
+// Keeps the app itself on the device, so it opens even with no signal (data is already kept by Firestore).
+if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch((e) => console.warn('sw', e)));
 }
 
 main();

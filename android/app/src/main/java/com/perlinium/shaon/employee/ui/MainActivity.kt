@@ -149,9 +149,9 @@ private fun Main() {
     }
 
     sheetFor?.let { (_, shift) ->
-        RequestSheet(shift, onClose = { sheetFor = null }) { msg ->
+        RequestSheet(shift, onClose = { sheetFor = null }) { msg, wasRequest ->
             sheetFor = null
-            tab = Tab.Requests
+            if (wasRequest) tab = Tab.Requests
             scope.launch { snack.showSnackbar(msg) }
         }
     }

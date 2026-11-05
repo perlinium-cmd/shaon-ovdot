@@ -771,3 +771,5 @@ main {
 .live-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 700; color: var(--primary-soft-text); background: var(--primary-soft); padding: 1px 8px; border-radius: 999px; }
 .src-badge { font-size: .72rem; color: var(--muted); border: 1px solid var(--border); padding: 0 6px; border-radius: 999px; margin-inline-start: 6px; }
 .paid-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.offline-banner { background: var(--surface-2); color: var(--text); }

@@ -173,13 +173,16 @@ fun ClockScreen(
             val mins = ((now - (s.inAt ?: now)) / 60000).toInt()
             if (mins >= 10 * 60) LongShiftCard(mins) { onRequest(s) }
             if (s.pending) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { OfflineNote() }
+            if (mins < 10 * 60) TextButton(onClick = { onRequest(s) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("תיקון שעת הכניסה", style = MaterialTheme.typography.labelLarge)
+            }
         }
 
         MonthCard(onOpenMonth)
 
         if (open == null) {
             TextButton(onClick = { onRequest(null) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("שכחת ללחוץ כניסה? בקשי להוסיף משמרת", style = MaterialTheme.typography.labelLarge)
+                Text("שכחת ללחוץ? אפשר להוסיף משמרת", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -293,7 +296,7 @@ private fun LongShiftCard(mins: Int, onFix: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("את במשמרת כבר ${fmtHM(mins)} שעות", style = MaterialTheme.typography.titleSmall)
-                Text("שכחת ללחוץ יציאה? אפשר לבקש תיקון של השעה.", style = MaterialTheme.typography.bodyMedium)
+                Text("שכחת ללחוץ יציאה? אפשר לרשום את השעה שבה יצאת.", style = MaterialTheme.typography.bodyMedium)
             }
             TextButton(onClick = onFix) { Text("תיקון") }
         }

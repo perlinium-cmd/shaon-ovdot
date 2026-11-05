@@ -11,9 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** Quick Settings tile: clock in / out from the top of the screen. Active (highlighted) = on shift. */
 class ClockTile : TileService() {
@@ -45,7 +43,7 @@ class ClockTile : TileService() {
         scope.launch {
             Repo.ensureStarted()
             if (Repo.phase.value != Phase.Ready) return@launch
-            withTimeoutOrNull(4000) { Repo.openLoaded.first { it } }
+            if (!Repo.awaitOpenLoaded(4000)) return@launch   // unknown state: never guess between in and out
             val open = Repo.openShift.value
             if (open != null) Repo.clockOut(open)?.let { out -> Notifier.clearShift(this@ClockTile); Notifier.done(this@ClockTile, open, out) }
             else Repo.clockIn()

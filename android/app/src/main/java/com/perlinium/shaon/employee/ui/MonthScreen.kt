@@ -113,7 +113,7 @@ fun MonthScreen(onShift: (Shift) -> Unit) {
                 }
             }
         }
-        item { Text("לחיצה על משמרת פותחת בקשת תיקון", style = MaterialTheme.typography.bodySmall,
+        item { Text("לחיצה על משמרת פותחת תיקון שעות", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center) }
     }
 }

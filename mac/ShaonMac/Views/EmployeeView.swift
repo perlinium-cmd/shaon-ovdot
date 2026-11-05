@@ -77,6 +77,8 @@ struct EmployeeView: View {
                     }
                     if s.fromPhone { Image(systemName: "iphone.gen3").foregroundStyle(.secondary).help("נרשם מהטלפון של העובדת") }
                     if s.fixedBy != nil { Image(systemName: "pencil.circle").foregroundStyle(.secondary).help("תוקן לפי בקשה שאישרת") }
+                    if s.manual == true { Image(systemName: "keyboard").foregroundStyle(.secondary).help("העובדת הזינה את המשמרת בעצמה אחרי העבודה, באותו יום") }
+                    if s.edited == true { Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).help("העובדת שינתה בטלפון את שעת הכניסה או היציאה") }
                     if let g = s.clockGapMinutes, g > 10 {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                             .help("השעה נרשמה בטלפון \(Int(g)) דקות לפני שהגיעה לשרת. זה קורה כשאין קליטה, או כשהשעון בטלפון לא נכון. כדאי לוודא.")

@@ -80,7 +80,7 @@ class ToggleClock : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         Repo.init(context); Repo.ensureStarted()
         if (Repo.phase.value != Phase.Ready) return
-        withTimeoutOrNull(4000) { Repo.openLoaded.first { it } }
+        if (!Repo.awaitOpenLoaded(4000)) return   // unknown state: never guess between in and out
         val open = Repo.openShift.value
         if (open != null) Repo.clockOut(open)?.let { out -> Notifier.clearShift(context); Notifier.done(context, open, out) }
         else Repo.clockIn()

@@ -24,10 +24,13 @@ data class Shift(
     val open: Boolean = false,
     val source: String? = null,
     val inAt: Long? = null,
+    val outAt: Long? = null,
     val outSyncedAt: Long? = null,
     val syncedAt: Long? = null,
     val note: String? = null,
     val fixedBy: String? = null,
+    /** Times she changed herself without approval (logic/Direct.kt allows MAX_PHONE_EDITS). */
+    val edits: Int = 0,
     /** Saved on this phone but not on the server yet (no reception). */
     val pending: Boolean = false,
 )
@@ -69,9 +72,10 @@ fun DocumentSnapshot.toShift(): Shift? {
         rate = get("rate").num(),
         special = sp?.let { Special(it["rate"].num(), it["hours"].num()) },
         paid = getBoolean("paid") == true, open = getBoolean("open") == true,
-        source = getString("source"), inAt = get("inAt").ms(),
+        source = getString("source"), inAt = get("inAt").ms(), outAt = get("outAt").ms(),
         syncedAt = get("syncedAt").ms(), outSyncedAt = get("outSyncedAt").ms(),
         note = getString("note"), fixedBy = getString("fixedBy"),
+        edits = (get("edits") as? Number)?.toInt() ?: 0,
         pending = metadata.hasPendingWrites(),
     )
 }

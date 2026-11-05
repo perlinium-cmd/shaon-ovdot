@@ -43,8 +43,8 @@ struct RootView: View {
             let agg = model.agg
             List(selection: $route) {
                 Label("סיכום חודשי", systemImage: "chart.bar").tag(Route.summary)
-                Label("בקשות", systemImage: "tray").tag(Route.requests)
-                    .badge(model.pendingRequests.count)
+                Label("בקשות ועדכונים", systemImage: "tray").tag(Route.requests)
+                    .badge(model.pendingRequests.count + model.unseenNotices.count)
                 Label("טלפונים מחוברים", systemImage: "iphone.gen3").tag(Route.phones)
                 Section("עובדות") {
                     ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)) }
@@ -63,7 +63,7 @@ struct RootView: View {
                 Group {
                     switch route ?? .summary {
                     case .summary: SummaryView { route = .employee($0) }
-                    case .requests: RequestsView()
+                    case .requests: RequestsView { route = .employee($0) }
                     case .phones: PhonesView()
                     case .employee(let id): EmployeeView(empId: id).id(id)
                     }

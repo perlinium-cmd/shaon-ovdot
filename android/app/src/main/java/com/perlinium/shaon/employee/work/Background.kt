@@ -27,9 +27,7 @@ import com.perlinium.shaon.employee.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
 
 /** Notifications: the ongoing "on shift" one (with an exit button), reminders, request answers. */
@@ -114,8 +112,7 @@ class ClockReceiver : BroadcastReceiver() {
             try {
                 Repo.init(ctx); Repo.ensureStarted()
                 if (Repo.phase.value == Phase.Ready) {
-                    withTimeoutOrNull(5000) { Repo.openLoaded.first { it } }
-                    Repo.openShift.value?.let { s -> Repo.clockOut(s)?.let { out -> Notifier.clearShift(ctx); Notifier.done(ctx, s, out) } }
+                    if (Repo.awaitOpenLoaded(5000)) Repo.openShift.value?.let { s -> Repo.clockOut(s)?.let { out -> Notifier.clearShift(ctx); Notifier.done(ctx, s, out) } }
                 }
             } finally { pending.finish() }
         }
@@ -132,7 +129,7 @@ class CheckWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
         val ctx = applicationContext
         Repo.init(ctx); Repo.ensureStarted()
         if (Repo.phase.value != Phase.Ready) return Result.success()
-        withTimeoutOrNull(8000) { Repo.openLoaded.first { it } }
+        if (!Repo.awaitOpenLoaded(8000)) return Result.success()
         val prefs = ctx.getSharedPreferences("worker", Context.MODE_PRIVATE)
         val s = Repo.openShift.value
         if (s == null) Notifier.clearShift(ctx) else {
