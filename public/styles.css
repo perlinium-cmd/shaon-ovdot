@@ -766,3 +766,33 @@ main {
   .report { border: 0; box-shadow: none; padding: 0; }
   .rtable-wrap { overflow: visible; }
 }
+
+/* ---------- Open shift (clocked in, exit later) ---------- */
+.live-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--success); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent);
+  animation: live-pulse 2s ease-out infinite;
+}
+@keyframes live-pulse { 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+.on-shift {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+  font-size: 13px; font-weight: 600; color: var(--primary-soft-text);
+}
+#clock-wrap:empty { display: none; }
+#clock-wrap { margin-bottom: 16px; }
+.clock-in-btn { justify-content: center; gap: 8px; }
+.clock-card {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-radius: 14px; text-align: right;
+  background: var(--primary-soft); color: var(--primary-soft-text);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.clock-card.stale { background: var(--warn-soft); color: var(--warn-text); border-color: color-mix(in srgb, var(--warn-text) 35%, transparent); }
+.clock-card.stale .live-dot { background: var(--warn-text); animation: none; }
+.clock-info { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1 1 220px; }
+.clock-info .live-dot { margin-top: 7px; }
+.clock-title { font-weight: 700; font-size: 16px; }
+.clock-sub { font-size: 13px; margin-top: 2px; opacity: .9; }
+.clock-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.offline-banner { background: var(--surface-2); color: var(--text); }

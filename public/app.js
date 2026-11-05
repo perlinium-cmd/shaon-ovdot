@@ -35,6 +35,11 @@ const shiftMinutes = (tin, tout) => {
 };
 /** Time range that always reads start-on-the-right (matches the form: כניסה on the right). */
 const rng = (a, b) => `<span class="num" dir="rtl"><bdi>${fmtTime(a)}</bdi> – <bdi>${fmtTime(b)}</bdi></span>`;
+const nowHHMM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/** When an open shift started (local time, ms). */
+const clockStart = (c) => { const d = parseDate(c.date); const [h, m] = c.in.split(':').map(Number); d.setHours(h, m, 0, 0); return d.getTime(); };
+/** An open shift longer than this was surely forgotten: ask for the real exit time instead of "now". */
+const MAX_OPEN_MIN = 18 * 60;
 const isOvernight = (tin, tout) => tin && tout && toMin(tout) < toMin(tin);
 const fmtHM = (min) => `${Math.floor(min / 60)}:${pad(Math.round(min % 60))}`;
 const fmtHours = (min) => {
@@ -222,6 +227,7 @@ const timeFieldHTML = (key, label) => `
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
 
 /* =========================================================
    State
@@ -232,6 +238,7 @@ const state = {
   settings: null, // null until loaded
   employees: null, // null until loaded
   shifts: null, // shifts of state.month; null until loaded
+  clocks: {}, // open shifts (clocked in, no exit yet): empId → {date, in, note, special}
   month: sessionStorage.getItem('month') || currentMonth(),
 };
 let unsubs = [];
@@ -704,6 +711,7 @@ const HomeView = {
               ${avatar(e)}
               <div style="min-width:0">
                 <div class="emp-card-name">${esc(e.name)}</div>
+                ${state.clocks[e.id] ? `<div class="on-shift"><span class="live-dot" aria-hidden="true"></span>במשמרת מ-<bdi class="num">${fmtTime(state.clocks[e.id].in)}</bdi></div>` : ''}
                 <div class="emp-card-sub">${e.active === false ? 'בארכיון · ' : ''}${a.shifts.length ? `${a.shifts.length} משמרות` : 'אין משמרות החודש'} · ${fmtMoney(effRate(e))}/שעה</div>
               </div>
               <span class="go">${icon('chev-l')}</span>
@@ -735,11 +743,15 @@ const EmployeeView = {
     this.built = false;
     this.payments = [];
     this.showAllPays = false;
+    this.clockKey = undefined;
     this.unsubPay?.();
     this.unsubPay = state.store.watchPayments(id, (list) => { this.payments = list; if (this.built) this.renderPayments(); }, onDataError);
+    clearInterval(this.ticker);
+    this.ticker = setInterval(() => this.tick(), 30000);
     this.update();
   },
-  unmount() { this.unsubPay?.(); this.unsubPay = null; },
+  unmount() { this.unsubPay?.(); this.unsubPay = null; clearInterval(this.ticker); },
+  clock() { return state.clocks[this.id] || null; },
   defaultDate() {
     return state.month === currentMonth() ? todayStr() : `${state.month}-01`;
   },
@@ -756,6 +768,8 @@ const EmployeeView = {
     }
     if (!this.built) this.build();
     else if (this.fmt12 !== is12()) this.renderTimeFields();
+    this.syncClock();
+    this.renderClock();
     this.renderHead();
     this.renderList();
     this.renderPreview();
@@ -772,6 +786,7 @@ const EmployeeView = {
             <h2 id="entry-title">הוספת משמרת</h2>
             ${fmtToggleHTML()}
           </div>
+          <div id="clock-wrap"></div>
           <div class="field">
             <span class="field-label" id="date-lbl">תאריך</span>
             <div class="chips" role="group" aria-labelledby="date-lbl">
@@ -826,6 +841,7 @@ const EmployeeView = {
         </div>
       </div>`;
     $('#note-toggle').addEventListener('click', () => { this.setNote(''); $('#note-wrap').hidden = false; $('#note-toggle').hidden = true; $('#f-note').focus(); });
+    $('#f-note').addEventListener('input', () => this.saveDraft());
 
     const f = $('#entry');
     this.fDate = $('#f-date');
@@ -852,6 +868,130 @@ const EmployeeView = {
     [this.fDate, this.fIn, this.fOut].forEach((i) => i.removeAttribute('aria-invalid'));
     this.syncChips();
     this.renderPreview();
+    this.saveDraft();
+  },
+
+  /* ----- open shift (clocked in, exit later) -----
+     The entry is stored the moment it's recorded (on the device first, then synced), so closing the app,
+     a dead battery or no signal can't lose it: whenever the app is opened again it's waiting here for the exit. */
+  syncClock() {
+    const c = this.clock();
+    const key = c ? `${c.date} ${c.in}` : null;
+    if (key === this.clockKey) return;
+    const first = this.clockKey === undefined;
+    this.clockKey = key;
+    if (this.form.editingId) return;
+    if (c) {
+      this.form.date = c.date; this.fDate.value = c.date;
+      this.setTime('in', c.in);
+      this.setSpecial(c.special && c.special.rate != null ? c.special : null);
+      this.setNote(c.note || '');
+    } else if (!first) { // closed here or on another device
+      this.setTime('in', ''); this.setTime('out', '');
+      this.setSpecial(null); this.setNote('');
+    } else this.restoreDraft();
+    this.syncChips();
+  },
+  /** Back to the open shift (or a clean form) after editing / saving another shift. */
+  reattach() { this.clockKey = undefined; this.syncClock(); this.renderClock(); this.renderPreview(); },
+
+  renderClock() {
+    const wrap = $('#clock-wrap');
+    if (!wrap) return;
+    const c = this.clock();
+    if (this.form.editingId) { wrap.innerHTML = ''; return; }
+    if (!c) {
+      wrap.innerHTML = `<button type="button" class="btn btn-secondary btn-block clock-in-btn" id="clock-in">${icon('clock')}<span>כניסה עכשיו <span class="muted">· היציאה תירשם אחר כך</span></span></button>`;
+      $('#clock-in').addEventListener('click', () => this.clockInNow());
+      return;
+    }
+    const min = Math.round((Date.now() - clockStart(c)) / 60000);
+    const stale = min > MAX_OPEN_MIN;
+    this.clockStale = stale;
+    const when = c.date === todayStr() ? '' : c.date === yesterdayStr() ? 'אתמול ' : `${fmtDayMonth(c.date)} `;
+    wrap.innerHTML = `
+      <div class="clock-card${stale ? ' stale' : ''}">
+        <div class="clock-info">
+          <span class="live-dot" aria-hidden="true"></span>
+          <div>
+            <div class="clock-title">במשמרת · נכנסה ${when}ב-<bdi class="num">${fmtTime(c.in)}</bdi></div>
+            <div class="clock-sub">${stale
+              ? 'המשמרת פתוחה הרבה זמן. הזינו למטה את שעת היציאה האמיתית ולחצו "שמירת יציאה".'
+              : `עד עכשיו <span class="num" id="clock-elapsed">${fmtHM(Math.max(0, min))}</span> שעות · הכניסה שמורה גם אם האפליקציה נסגרת`}</div>
+          </div>
+        </div>
+        <div class="clock-actions">
+          ${stale ? '' : `<button type="button" class="btn btn-primary" id="clock-out">${icon('logout')}יציאה עכשיו</button>`}
+          <button type="button" class="link-btn" id="clock-cancel">ביטול הכניסה</button>
+        </div>
+      </div>`;
+    $('#clock-out')?.addEventListener('click', () => this.clockOutNow());
+    $('#clock-cancel').addEventListener('click', () => this.cancelClock());
+  },
+  tick() {
+    const c = this.clock();
+    if (!this.built || !c) return;
+    const min = Math.round((Date.now() - clockStart(c)) / 60000);
+    if ((min > MAX_OPEN_MIN) !== !!this.clockStale) { this.renderClock(); return; }
+    const el = $('#clock-elapsed');
+    if (el) el.textContent = fmtHM(Math.max(0, min));
+  },
+  async clockInNow() {
+    const btn = $('#clock-in');
+    const sp = this.readSpecial();
+    const special = sp && sp.rate != null && !Number.isNaN(sp.rate) && !(sp.part && !(sp.hours > 0)) ? { rate: sp.rate, hours: sp.part ? sp.hours : null } : null;
+    const note = $('#f-note').value.trim() || null;
+    const t = nowHHMM();
+    btn?.classList.add('is-loading'); if (btn) btn.disabled = true;
+    try {
+      await state.store.setClock(this.id, { date: todayStr(), in: t, startedAt: Date.now(), note, special });
+      this.clearDraft();
+      toast(`נרשמה כניסה ב-${fmtTime(t)}`);
+    } catch (e) { fail(e); btn?.classList.remove('is-loading'); if (btn) btn.disabled = false; }
+  },
+  clockOutNow() {
+    const c = this.clock();
+    if (!c) return;
+    if (!this.form.in) { this.form.date = c.date; this.fDate.value = c.date; this.setTime('in', c.in); }
+    this.setTime('out', nowHHMM());
+    this.save();
+  },
+  async cancelClock() {
+    const c = this.clock();
+    if (!c) return;
+    const ok = await confirmSheet({
+      title: 'ביטול הכניסה',
+      text: `הכניסה של ${fmtTime(c.in)} תימחק ולא תירשם משמרת.`,
+      okLabel: 'ביטול הכניסה',
+    });
+    if (!ok) return;
+    const { id, ...data } = c;
+    try {
+      await state.store.clearClock(this.id);
+      toast('הכניסה בוטלה', { undo: () => state.store.setClock(this.id, data) });
+    } catch (e) { fail(e); }
+  },
+
+  /* ----- draft: a half-filled form survives the app closing (kept 12 hours) ----- */
+  draftKey() { return `draft-${this.id}`; },
+  saveDraft() {
+    // clockKey is undefined until the form was filled once (open shift or draft): don't wipe the draft before that
+    if (!this.built || this.clockKey === undefined || this.form.editingId || this.clock() || this.restoring) return;
+    const note = $('#f-note')?.value.trim() || '';
+    const { date, in: tin, out: tout } = this.form;
+    if (!tin && !tout && !note) { lsDel(this.draftKey()); return; }
+    lsSet(this.draftKey(), JSON.stringify({ date, in: tin, out: tout, note, t: Date.now() }));
+  },
+  clearDraft() { lsDel(this.draftKey()); },
+  restoreDraft() {
+    let d = null;
+    try { d = JSON.parse(lsGet(this.draftKey()) || 'null'); } catch { /* ignore */ }
+    if (!d || !(Date.now() - d.t < 12 * 3600 * 1000)) { this.clearDraft(); return; }
+    this.restoring = true;
+    if (d.date) { this.form.date = d.date; this.fDate.value = d.date; }
+    this.setTime('in', d.in || ''); this.setTime('out', d.out || '');
+    this.setNote(d.note || '');
+    this.restoring = false;
   },
 
   /* ----- special rate (manual amount per shift) ----- */
@@ -968,6 +1108,7 @@ const EmployeeView = {
     $('#entry-err').textContent = '';
     this.fIn?.removeAttribute('aria-invalid'); this.fOut?.removeAttribute('aria-invalid');
     this.renderPreview();
+    this.saveDraft();
   },
 
   syncChips() {
@@ -1132,8 +1273,20 @@ const EmployeeView = {
         <div class="pay num">${fmtMoney(shiftPay(draft, this.emp()))}</div>`;
     } else {
       pv.className = 'preview empty-state';
-      pv.textContent = 'בחר שעת כניסה ויציאה';
+      pv.textContent = this.clock() && !editingId ? (this.clockStale ? 'הזינו את שעת היציאה האמיתית' : 'הזינו שעת יציאה, או לחצו "יציאה עכשיו"')
+        : tin && !tout && !editingId ? 'אפשר לשמור עכשיו רק את הכניסה, ולרשום יציאה אחר כך'
+          : 'בחר שעת כניסה ויציאה';
     }
+    this.syncSubmit();
+  },
+  /** The main button says what it will do: save a shift, record only the entry, or record the exit. */
+  syncSubmit() {
+    if (this.form.editingId) return;
+    const b = $('#entry button[type=submit]');
+    if (!b || b.classList.contains('is-loading')) return;
+    const label = this.clock() ? 'שמירת יציאה'
+      : this.form.in && !this.form.out && !this.fOut.value ? 'שמירת כניסה · יציאה אחר כך' : 'שמירה';
+    b.innerHTML = `${icon('check')}${label}`;
   },
 
   renderActions() {
@@ -1151,6 +1304,7 @@ const EmployeeView = {
       $('#cancel-edit').addEventListener('click', () => this.stopEdit());
       $('#del-shift').addEventListener('click', () => this.remove());
     }
+    this.renderClock();
   },
 
   startEdit(id) {
@@ -1174,6 +1328,7 @@ const EmployeeView = {
     this.setNote('');
     $('#entry-err').textContent = '';
     this.renderActions(); this.renderList(); this.renderPreview();
+    this.reattach();
   },
 
   async save() {
@@ -1182,8 +1337,9 @@ const EmployeeView = {
     let bad = null;
     if (!date) bad = [this.fDate, 'צריך לבחור תאריך'];
     else if (!tin) bad = [this.fIn, this.fIn.value ? 'שעת הכניסה לא תקינה' : 'צריך להזין שעת כניסה'];
-    else if (!tout) bad = [this.fOut, this.fOut.value ? 'שעת היציאה לא תקינה' : 'צריך להזין שעת יציאה'];
-    else if (tin === tout) bad = [this.fOut, 'שעת היציאה זהה לשעת הכניסה'];
+    else if (!tout && (this.fOut.value || editingId || this.clock())) {
+      bad = [this.fOut, this.fOut.value ? 'שעת היציאה לא תקינה' : this.clock() && !editingId && !this.clockStale ? 'צריך להזין שעת יציאה, או ללחוץ "יציאה עכשיו"' : 'צריך להזין שעת יציאה'];
+    } else if (tout && tin === tout) bad = [this.fOut, 'שעת היציאה זהה לשעת הכניסה'];
     const sp = this.readSpecial();
     if (!bad && sp && (sp.rate == null || Number.isNaN(sp.rate))) bad = [$('#sp-rate'), 'צריך להזין סכום לשעה לתעריף המיוחד'];
     else if (!bad && sp?.part && (sp.hours == null || Number.isNaN(sp.hours) || sp.hours <= 0)) bad = [$('#sp-hours'), 'צריך להזין כמה שעות בתעריף המיוחד'];
@@ -1194,26 +1350,38 @@ const EmployeeView = {
     const btn = $('#entry button[type=submit]');
     btn.classList.add('is-loading'); btn.disabled = true;
     const month = date.slice(0, 7);
+    const clock = !editingId && this.clock();
     try {
+      if (!tout) { // entry only: the exit is recorded later, even if the app is closed in between
+        await state.store.setClock(this.id, { date, in: tin, startedAt: Date.now(), note, special });
+        this.clearDraft();
+        toast(`נרשמה כניסה ב-${fmtTime(tin)} · היציאה תירשם אחר כך`);
+        return;
+      }
       if (editingId) {
         await withUndo('המשמרת עודכנה', [{ col: 'shifts', id: editingId }],
           () => state.store.updateShift(editingId, { date, month, in: tin, out: tout, special, note }));
         this.form.editingId = null;
         this.renderActions();
       } else {
-        await state.store.addShift({ empId: this.id, date, month, in: tin, out: tout, rate: effRate(this.emp()), special, note, paid: false });
-        toast(`נשמר: ${fmtDayMonth(date)} · ${fmtHM(shiftMinutes(tin, tout))} שעות`);
+        const shift = { empId: this.id, date, month, in: tin, out: tout, rate: effRate(this.emp()), special, note, paid: false };
+        if (clock) await state.store.closeClock(this.id, shift); // adds the shift and closes the open one together
+        else await state.store.addShift(shift);
+        toast(`${clock ? 'נרשמה יציאה' : 'נשמר'}: ${fmtDayMonth(date)} · ${fmtHM(shiftMinutes(tin, tout))} שעות`);
       }
+      this.clearDraft();
       lsSet(`last-${this.id}`, `${tin}-${tout}`);
       this.setTime('in', ''); this.setTime('out', '');
       this.setSpecial(null);
       this.setNote('');
       if (month !== state.month) setMonth(month, { keepForm: true });
       this.renderList(); this.renderPreview();
+      this.reattach();
       if (matchMedia('(pointer: fine)').matches) this.fIn.focus();
     } catch (e) { fail(e); } finally {
       const b = $('#entry button[type=submit]');
       if (b) { b.classList.remove('is-loading'); b.disabled = false; }
+      this.syncSubmit();
     }
   },
 
@@ -1858,7 +2026,7 @@ function setMonth(month, { keepForm = false } = {}) {
   sessionStorage.setItem('month', month);
   renderMonth();
   subscribeShifts();
-  if (!keepForm && mounted.view === EmployeeView && !EmployeeView.form.editingId && EmployeeView.built) {
+  if (!keepForm && mounted.view === EmployeeView && !EmployeeView.form.editingId && EmployeeView.built && !EmployeeView.clock()) {
     EmployeeView.fDate.value = EmployeeView.defaultDate();
     EmployeeView.onInput();
   }
@@ -1891,6 +2059,10 @@ function subscribeAll() {
   unsubs.forEach((u) => u()); unsubs = [];
   unsubs.push(state.store.watchSettings((s) => { state.settings = s; refresh(); }, onDataError));
   unsubs.push(state.store.watchEmployees((list) => { state.employees = list; refresh(); }, onDataError));
+  unsubs.push(state.store.watchClocks((list) => {
+    state.clocks = Object.fromEntries(list.map((c) => [c.id, c]));
+    refresh();
+  }, onDataError));
   subscribeShifts();
 }
 
@@ -1907,6 +2079,15 @@ async function main() {
     return;
   }
   $('#demo-banner').hidden = !state.store.demo;
+  // A write that was saved on the device but later refused by the server (rare): say so instead of hiding it.
+  state.store.onLateError = (e) => {
+    if (e?.code === 'permission-denied') onDataError(e);
+    else { console.error(e); toast('שינוי אחד לא הסתנכרן לשרת – כדאי לבדוק את הרשימה', { error: true }); }
+  };
+  const syncOnline = () => { $('#offline-banner').hidden = navigator.onLine; };
+  window.addEventListener('online', syncOnline);
+  window.addEventListener('offline', syncOnline);
+  syncOnline();
 
   $('#btn-signin').addEventListener('click', async () => {
     const btn = $('#btn-signin');
@@ -1931,6 +2112,7 @@ async function main() {
     if (!user) {
       unsubs.forEach((u) => u()); unsubs = []; unsubShifts?.(); unsubShifts = null;
       state.settings = state.employees = state.shifts = null;
+      state.clocks = {};
       mounted.view?.unmount?.();
       mounted = { key: null, view: null };
       showScreen('login');
@@ -1941,6 +2123,11 @@ async function main() {
     subscribeAll();
     route();
   });
+}
+
+// Keeps the app itself on the phone, so it opens even with no signal (data is already kept by Firestore).
+if ('serviceWorker' in navigator && !new URLSearchParams(location.search).has('nosw')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch((e) => console.warn('sw', e)));
 }
 
 main();
