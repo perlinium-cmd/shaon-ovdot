@@ -113,6 +113,18 @@ service cloud.firestore {
         && getAfter(devPath(owner)).data.keyId == key;
     }
 
+    // Survives uninstall/reinstall: the id is a hash of the phone's app-scoped Android ID, which only this app
+    // on this phone can compute. It points to the phone's reconnect key; once the manager deletes that key
+    // (disconnect), the card is useless.
+    match /restore/{rid} {
+      allow get: if signedIn() && rid.matches('^[a-f0-9]{64}$');
+      allow create, update: if signedIn() && rid.matches('^[a-f0-9]{64}$')
+        && request.resource.data.keys().hasOnly(['ownerUid', 'empId', 'empName', 'keyId', 'deviceUid'])
+        && request.resource.data.deviceUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.resource.data.ownerUid)/devices/$(request.auth.uid)).data.keyId == request.resource.data.keyId
+        && getAfter(/databases/$(database)/documents/users/$(request.resource.data.ownerUid)/devices/$(request.auth.uid)).data.empId == request.resource.data.empId;
+    }
+
     /* ---------- what a connected phone may see and do ---------- */
 
     match /users/{owner}/settings/{docId} {

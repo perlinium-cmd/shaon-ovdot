@@ -187,6 +187,31 @@ describe('connect once, forever', () => {
   });
 });
 
+describe('restore card (survives reinstall)', () => {
+  const RID = 'a'.repeat(64);
+  const card = (uid, over = {}) => ({ ownerUid: OWNER, empId: 'e1', empName: 'נועה', keyId: KEY, deviceUid: uid, ...over });
+  beforeEach(async () => { await createPairing(ownerDb()); await pairBatch(phoneDb('phone1'), 'phone1'); });
+
+  it('a connected phone writes its card, and a fresh install can read it', async () => {
+    await assertSucceeds(setDoc(doc(phoneDb('phone1'), 'restore', RID), card('phone1')));
+    await assertSucceeds(getDoc(doc(phoneDb('phone1b'), 'restore', RID)));
+  });
+  it('cannot write a card for a key or employee it does not hold', async () => {
+    await assertFails(setDoc(doc(phoneDb('phone1'), 'restore', RID), card('phone1', { keyId: 'x'.repeat(48) })));
+    await assertFails(setDoc(doc(phoneDb('phone1'), 'restore', RID), card('phone1', { empId: 'e2' })));
+    await assertFails(setDoc(doc(phoneDb('phone9'), 'restore', RID), card('phone9')));
+  });
+  it('cards cannot be listed, and ids must be full hashes', async () => {
+    await assertFails(getDocs(collection(phoneDb('phone9'), 'restore')));
+    await assertFails(getDoc(doc(phoneDb('phone9'), 'restore', 'short')));
+  });
+  it('after reconnecting, the new install updates the card', async () => {
+    await setDoc(doc(phoneDb('phone1'), 'restore', RID), card('phone1'));
+    await rejoinBatch(phoneDb('phone1b'), 'phone1b');
+    await assertSucceeds(setDoc(doc(phoneDb('phone1b'), 'restore', RID), card('phone1b')));
+  });
+});
+
 describe('connected phone: reading', () => {
   beforeEach(() => pairPhone());
 
