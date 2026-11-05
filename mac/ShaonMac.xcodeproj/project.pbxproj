@@ -31,6 +31,7 @@
 		D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9149960A6CA7DE765BE251B0 /* Haptics.swift */; };
 		D4CB958B5A4CA760AE3AB2AA /* EmployeeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */; };
 		DE5882363DC9CAA5C2041158 /* TimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B7E28D470C20B8432B1EE0 /* TimeField.swift */; };
+		E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */; };
 		EAAB0A96940BB09E06B5C5A1 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
 /* End PBXBuildFile section */
 
@@ -67,6 +68,7 @@
 		A896E25D54C73D73DEA728DB /* GearClick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GearClick.swift; sourceTree = "<group>"; };
 		A8C68CA57BD3DAB3CDBFCADC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B125D8531F3E37894792F2C2 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPayCasesTests.swift; sourceTree = "<group>"; };
 		D9B7E28D470C20B8432B1EE0 /* TimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeField.swift; sourceTree = "<group>"; };
 		DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		E53E8465F388F04B22FBB8F9 /* DemoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStore.swift; sourceTree = "<group>"; };
@@ -91,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				7115E89A87DAEE80BD259411 /* PayTests.swift */,
+				C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */,
 			);
 			path = ShaonTests;
 			sourceTree = "<group>";
@@ -299,6 +302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */,
+				E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

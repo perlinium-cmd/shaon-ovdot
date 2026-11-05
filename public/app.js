@@ -1,4 +1,5 @@
 import { createStore } from './data.js';
+import { round2, shiftMinutes, isOvernight, specialMinutes, shiftPay as payFor } from './pay.js';
 
 /* =========================================================
    Helpers
@@ -7,7 +8,6 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, '0');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const icon = (name, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-const round2 = (n) => Math.round(n * 100) / 100;
 
 const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const todayStr = () => toDateStr(new Date());
@@ -25,17 +25,8 @@ const fmtMonthName = (month) => new Intl.DateTimeFormat('he-IL', { month: 'long'
 const fmtWeekday = (date) => new Intl.DateTimeFormat('he-IL', { weekday: 'short' }).format(parseDate(date));
 const fmtDayMonth = (date) => { const d = parseDate(date); return `${d.getDate()}/${d.getMonth() + 1}`; };
 
-const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-/** Minutes worked. If out is earlier than in, the shift crosses midnight. */
-const shiftMinutes = (tin, tout) => {
-  if (!tin || !tout) return 0;
-  let diff = toMin(tout) - toMin(tin);
-  if (diff < 0) diff += 24 * 60;
-  return diff;
-};
 /** Time range that always reads start-on-the-right (matches the form: כניסה on the right). */
 const rng = (a, b) => `<span class="num" dir="rtl"><bdi>${fmtTime(a)}</bdi> – <bdi>${fmtTime(b)}</bdi></span>`;
-const isOvernight = (tin, tout) => tin && tout && toMin(tout) < toMin(tin);
 const fmtHM = (min) => `${Math.floor(min / 60)}:${pad(Math.round(min % 60))}`;
 const fmtHours = (min) => {
   const h = min / 60;
@@ -243,18 +234,8 @@ const shiftRate = (s, emp) => (s.rate != null ? s.rate : effRate(emp));
 const empById = (id) => state.employees?.find((e) => e.id === id);
 const sortShifts = (list) => [...list].sort((a, b) => (b.date.localeCompare(a.date)) || (b.in.localeCompare(a.in)));
 
-/** Minutes of a shift paid at its special rate (all of it, or only `special.hours`). */
-function specialMinutes(s) {
-  if (!s.special || s.special.rate == null) return 0;
-  const min = shiftMinutes(s.in, s.out);
-  return s.special.hours == null ? min : Math.min(min, s.special.hours * 60);
-}
-/** Pay for one shift: regular rate, with an optional special hourly amount for all/part of it. */
-function shiftPay(s, emp) {
-  const min = shiftMinutes(s.in, s.out);
-  const spMin = specialMinutes(s);
-  return ((min - spMin) / 60) * shiftRate(s, emp) + (spMin / 60) * (s.special?.rate ?? 0);
-}
+/** Pay for one shift (see pay.js), using the current default rate. */
+function shiftPay(s, emp) { return payFor(s, emp, state.settings?.defaultRate); }
 
 function monthAgg() { return aggOf(state.shifts || []); }
 /** Per-employee totals for any list of shifts: Map(empId → {shifts, minutes, pay, paidPay, paidCount}). */

@@ -9,5 +9,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - name: Syntax check JS
         run: for f in public/*.js; do node --check "$f"; done
+      - name: Install test dependencies
+        run: npm ci
+      - name: Pay calculation tests (shared cases)
+        run: npm test
+      - name: Firestore security rules tests (emulator)
+        run: npm run test:rules
