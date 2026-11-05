@@ -137,6 +137,16 @@ async function createFirebaseStore() {
         await batch.commit();
       }
     },
+    /** Before a rate change: write `rate` onto this employee's shifts that have none yet (shifts from her phone). */
+    async lockRates(empId, rate) {
+      const snap = await fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', empId)));
+      const ids = snap.docs.filter((d) => d.data().rate == null).map((d) => d.id);
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = fs.writeBatch(db);
+        ids.slice(i, i + 400).forEach((id) => batch.update(docRef('shifts', id), { rate }));
+        await batch.commit();
+      }
+    },
     async getShiftsRange(from, to) {
       const q = fs.query(colRef('shifts'), fs.where('date', '>=', from), fs.where('date', '<=', to));
       return snapList(await fs.getDocs(q));
@@ -206,6 +216,10 @@ function createDemoStore() {
     async restore(snaps) {
       await delay();
       snaps.forEach(({ col, id, data: d }) => { if (d) data[col][id] = clone(d); else delete data[col][id]; });
+      persist();
+    },
+    async lockRates(empId, rate) {
+      Object.values(data.shifts).forEach((sh) => { if (sh.empId === empId && sh.rate == null) sh.rate = rate; });
       persist();
     },
     async getShiftsRange(from, to) {

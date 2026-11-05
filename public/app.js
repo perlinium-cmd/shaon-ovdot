@@ -492,8 +492,10 @@ function employeeSheet(emp = null) {
       toast(`${name} נוספה`);
       location.hash = `#/e/${ref.id}`;
     } else {
-      await state.store.updateEmployee(emp.id, { name, rate, avatar: form.avatar.value });
       const newEff = rate != null ? rate : def;
+      // Past phone shifts keep the rate they were worked at (like shifts entered by hand).
+      if (newEff !== effRate(emp)) await state.store.lockRates(emp.id, effRate(emp));
+      await state.store.updateEmployee(emp.id, { name, rate, avatar: form.avatar.value });
       if (form.apply?.checked && newEff !== effRate(emp)) {
         await state.store.updateShifts(agg.shifts.map((s) => s.id), { rate: newEff });
       }
@@ -981,7 +983,7 @@ const EmployeeView = {
     const list = this.myShifts();
     const emp = this.emp();
     $('#list-title').textContent = `משמרות ב${fmtMonthName(state.month)}`;
-    const unpaid = list.filter((s) => !s.paid);
+    const unpaid = list.filter((s) => !s.paid && !s.open); // a running shift has no pay yet
     $('#list-count').innerHTML = !list.length ? ''
       : unpaid.length ? `<button type="button" class="btn btn-ghost btn-sm" id="pay-all">${icon('check')}סימון הכל כשולם</button>`
         : '<span class="paid-ok">הכל שולם ✓</span>';
@@ -1000,10 +1002,10 @@ const EmployeeView = {
           <button type="button" class="shift ${s.id === this.form.editingId ? 'selected' : ''}" data-id="${s.id}"
             aria-label="${fmtDayMonth(s.date)}, ${fmtTime(s.in)} עד ${fmtTime(s.out)}, ${fmtHM(min)} שעות, ${fmtMoney(pay)}. לחיצה לעריכה">
             <span class="shift-date"><span class="d num">${d.getDate()}</span><br><span class="w">${esc(fmtWeekday(s.date))}</span></span>
-            <span class="shift-times">${rng(s.in, s.out)}${isOvernight(s.in, s.out) ? '<span class="night">לילה</span>' : ''}${sp}${s.note ? `<span class="shift-note">${esc(s.note)}</span>` : ''}</span>
-            <span class="shift-amount"><span class="h num">${fmtHM(min)}</span><br><span class="p num">${fmtMoney(pay)}</span></span>
+            <span class="shift-times">${s.open ? `<span class="num">${fmtTime(s.in)} –</span> <span class="live-badge">במשמרת עכשיו</span>` : rng(s.in, s.out)}${s.source === 'phone' ? '<span class="src-badge" title="נרשם מהטלפון של העובדת">מהטלפון</span>' : ''}${isOvernight(s.in, s.out) ? '<span class="night">לילה</span>' : ''}${sp}${s.note ? `<span class="shift-note">${esc(s.note)}</span>` : ''}</span>
+            <span class="shift-amount"><span class="h num">${s.open ? '—' : fmtHM(min)}</span><br><span class="p num">${s.open ? '—' : fmtMoney(pay)}</span></span>
           </button>
-          <button type="button" class="paid-btn" data-paid="${s.id}" aria-pressed="${!!s.paid}"
+          <button type="button" class="paid-btn" data-paid="${s.id}" aria-pressed="${!!s.paid}" ${s.open && !s.paid ? 'disabled title="משמרת פעילה עדיין לא לתשלום"' : ''}
             aria-label="${s.paid ? 'שולם. לחיצה לביטול הסימון' : 'לא שולם. לחיצה לסימון כשולם'}">
             <span class="paid-dot">${icon('check')}</span><span class="paid-txt">${s.paid ? 'שולם' : 'לא שולם'}</span>
           </button>
@@ -1012,7 +1014,7 @@ const EmployeeView = {
       ul.querySelectorAll('.shift').forEach((b) => b.addEventListener('click', () => this.startEdit(b.dataset.id)));
       ul.querySelectorAll('.paid-btn').forEach((b) => b.addEventListener('click', async () => {
         const sh = list.find((x) => x.id === b.dataset.paid);
-        if (!sh) return;
+        if (!sh || (sh.open && !sh.paid)) return;
         const paid = !sh.paid;
         b.setAttribute('aria-pressed', String(paid)); // instant feedback
         b.closest('.shift-row').classList.toggle('is-paid', paid);
@@ -1068,7 +1070,7 @@ const EmployeeView = {
   },
 
   lastHours() {
-    const own = this.myShifts().filter((s) => s.id !== this.form.editingId);
+    const own = this.myShifts().filter((s) => s.id !== this.form.editingId && s.in && s.out);
     if (own.length) return { in: own[0].in, out: own[0].out };
     const saved = lsGet(`last-${this.id}`);
     if (saved) { const [i, o] = saved.split('-'); if (i && o) return { in: i, out: o }; }
@@ -1093,7 +1095,7 @@ const EmployeeView = {
     // Duplicate-date warning
     const same = (state.shifts || []).filter((s) => s.empId === this.id && s.date === date && s.id !== editingId);
     $('#dup-wrap').innerHTML = same.length
-      ? `<div class="notice">${icon('alert')}<span>כבר רשומה משמרת ב-${fmtDayMonth(date)}: ${same.map((s) => rng(s.in, s.out)).join(', ')}</span></div>`
+      ? `<div class="notice">${icon('alert')}<span>כבר רשומה משמרת ב-${fmtDayMonth(date)}: ${same.map((s) => (s.open ? `${fmtTime(s.in)} (עדיין במשמרת)` : rng(s.in, s.out))).join(', ')}</span></div>`
       : '';
 
     const pv = $('#preview');
@@ -1178,7 +1180,10 @@ const EmployeeView = {
     try {
       if (editingId) {
         await withUndo('המשמרת עודכנה', [{ col: 'shifts', id: editingId }],
-          () => state.store.updateShift(editingId, { date, month, in: tin, out: tout, special, note }));
+          () => state.store.updateShift(editingId, {
+            date, month, in: tin, out: tout, special, note,
+            ...((state.shifts || []).find((x) => x.id === editingId)?.open ? { open: false } : {}),
+          }));
         this.form.editingId = null;
         this.renderActions();
       } else {
@@ -1542,6 +1547,10 @@ const SettingsView = {
       btn.classList.add('is-loading'); btn.disabled = true;
       try {
         const list = $('#s-apply').checked ? affected() : [];
+        const old = state.settings.defaultRate;
+        if (old != null && r !== old) {
+          for (const e of (state.employees || []).filter((x) => x.rate == null)) await state.store.lockRates(e.id, old);
+        }
         await state.store.saveSettings({ defaultRate: r });
         if (list.length) await state.store.updateShifts(list.map((s) => s.id), { rate: r });
         toast('התעריף נשמר');
