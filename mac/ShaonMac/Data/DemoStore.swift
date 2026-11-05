@@ -9,6 +9,7 @@ final class DemoStore: DataStore {
     private var shifts: [String: Shift] = [:]
     private var devices: [String: Device] = [:]
     private var requests: [String: ShiftRequest] = [:]
+    private var notices: [String: Notice] = [:]
     private var pairings: [String: (Pairing, used: Bool)] = [:]
     private var listeners: [UUID: () -> Void] = [:]
 
@@ -34,6 +35,12 @@ final class DemoStore: DataStore {
                                source: "phone", open: true, inAt: ms, syncedAt: ms + 900, deviceId: "ph1")
         requests["r1"] = ShiftRequest(id: "r1", empId: "a", type: "fix", shiftId: "s2", date: shifts["s2"]!.date, in: "08:00", out: "16:30",
                                       note: "שכחתי ללחוץ יציאה", status: "pending", createdAt: now.timeIntervalSince1970 * 1000)
+        // A shift she typed in herself after work (saved without approval, the manager only hears about it).
+        let typedIn = Shift(id: "m1", empId: "b", date: today, month: String(today.prefix(7)), in: "07:30", out: "11:15",
+                            source: "phone", open: false, manual: true)
+        shifts[typedIn.id] = typedIn
+        notices["n1"] = Notice(id: "n1", empId: "b", type: "manual", shiftId: "m1", date: today, in: "07:30", out: "11:15",
+                               createdAt: now.timeIntervalSince1970 * 1000 - 20 * 60_000)
     }
 
     private func notify() { listeners.values.forEach { $0() } }
@@ -50,7 +57,8 @@ final class DemoStore: DataStore {
     func updateEmployee(_ e: Employee) async throws { employees[e.id] = e; notify() }
     func deleteEmployee(_ id: String) async throws {
         employees[id] = nil; shifts = shifts.filter { $0.value.empId != id }
-        devices = devices.filter { $0.value.empId != id }; requests = requests.filter { $0.value.empId != id }; notify()
+        devices = devices.filter { $0.value.empId != id }; requests = requests.filter { $0.value.empId != id }
+        notices = notices.filter { $0.value.empId != id }; notify()
     }
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void {
         watch { [weak self] in if let s = self { cb(s.shifts.values.filter { $0.month == month }) } }
@@ -70,6 +78,10 @@ final class DemoStore: DataStore {
     func watchOpenShifts(_ cb: @escaping ([Shift]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(s.shifts.values.filter(\.isOpen)) } } }
     func watchDevices(_ cb: @escaping ([Device]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(Array(s.devices.values)) } } }
     func watchRequests(_ cb: @escaping ([ShiftRequest]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(Array(s.requests.values)) } } }
+    func watchNotices(_ cb: @escaping ([Notice]) -> Void) -> () -> Void {
+        watch { [weak self] in if let s = self { cb(s.notices.values.sorted { ($0.createdAt ?? 0) > ($1.createdAt ?? 0) }) } }
+    }
+    func markNoticesSeen(_ ids: [String]) async throws { ids.forEach { notices[$0]?.seen = true }; notify() }
     func createPairing(empId: String, empName: String) async throws -> Pairing {
         let p = Pairing(code: newPairingCode(), empId: empId, empName: empName, expiresAt: Date().addingTimeInterval(600))
         pairings[p.code] = (p, false); notify(); return p
@@ -92,6 +104,24 @@ final class DemoStore: DataStore {
     }
     func simulateClockOut(_ id: String, time: String) { shifts[id]?.out = time; shifts[id]?.open = false; notify() }
     func simulateRequest(_ r: ShiftRequest) -> String { let id = newId(); var r = r; r.id = id; requests[id] = r; notify(); return id }
+    /// The phone typing in a forgotten shift on the same day: the shift and its notice arrive together.
+    func simulateManualShift(empId: String, date: String, in tin: String, out tout: String) -> String {
+        let id = newId(), nid = newId()
+        shifts[id] = Shift(id: id, empId: empId, date: date, month: String(date.prefix(7)), in: tin, out: tout, source: "phone", open: false,
+                           inAt: localMillis(date: date, time: tin), outAt: localMillis(date: date, time: tout), manual: true)
+        notices[nid] = Notice(id: nid, empId: empId, type: "manual", shiftId: id, date: date, in: tin, out: tout, createdAt: Date().timeIntervalSince1970 * 1000)
+        notify(); return id
+    }
+    /// The phone moving a clock-in / clock-out earlier (out "" = a running shift keeps running).
+    func simulateEarlierFix(_ id: String, in tin: String, out tout: String) {
+        guard var s = shifts[id] else { return }
+        let nid = newId()
+        notices[nid] = Notice(id: nid, empId: s.empId, type: "fix", shiftId: id, date: s.date, in: tin, out: tout, prevIn: s.in, prevOut: s.out,
+                              createdAt: Date().timeIntervalSince1970 * 1000)
+        s.in = tin; s.inAt = localMillis(date: s.date, time: tin); s.edited = true
+        if !tout.isEmpty { s.out = tout; s.outAt = localMillis(date: s.date, time: tout); s.open = false }
+        shifts[id] = s; notify()
+    }
 
     func decide(_ r: ShiftRequest, approve: Bool, rate: Double) async throws {
         guard approve else { requests[r.id]?.status = "rejected"; notify(); return }

@@ -47,7 +47,9 @@ struct LiveBanner: View {
 
 struct RequestsView: View {
     @Environment(AppModel.self) private var model
+    var onOpen: (String) -> Void = { _ in }
     @State private var busy: String?
+    @State private var newIds: Set<String> = []   // unseen when shown, so they stay highlighted while the page is open
 
     var body: some View {
         let pending = model.pendingRequests
@@ -62,14 +64,63 @@ struct RequestsView: View {
                 } else {
                     ForEach(pending) { r in card(r) }
                 }
+                if !model.notices.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("עדכונים מהטלפון").font(.headline)
+                        Text("שעות שהעובדות הזינו בעצמן באותו יום, או הקדימו. הן נשמרו בלי אישור. אם משהו לא נכון, אפשר לתקן בדף של העובדת.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 12)
+                    ForEach(model.notices.prefix(40)) { n in noticeRow(n) }
+                }
                 if !decided.isEmpty {
-                    Text("טופלו לאחרונה").font(.headline).padding(.top, 12)
+                    Text("בקשות שטופלו לאחרונה").font(.headline).padding(.top, 12)
                     ForEach(Array(decided)) { r in decidedRow(r) }
                 }
             }
             .padding(20).frame(maxWidth: 760, alignment: .leading)
         }
-        .navigationTitle("בקשות")
+        .navigationTitle("בקשות ועדכונים")
+        .task(id: model.unseenNotices.map(\.id)) {   // looking at the page marks the updates as read
+            let ids = model.unseenNotices.map(\.id)
+            guard !ids.isEmpty else { return }
+            newIds.formUnion(ids)
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { await model.markNoticesSeen() }
+        }
+    }
+
+    private func noticeRow(_ n: Notice) -> some View {
+        let name = model.emp(n.empId)?.name ?? "עובדת"
+        let d = model.describe(n)
+        let isNew = newIds.contains(n.id) || !n.isSeen
+        return Button {
+            model.month = String(n.date.prefix(7))
+            onOpen(n.empId)
+        } label: {
+            HStack(spacing: 10) {
+                Circle().fill(isNew ? Color.accentColor : .clear).frame(width: 8, height: 8)
+                Avatar(name: name, size: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(d.title).fontWeight(isNew ? .semibold : .regular)
+                    Text(d.detail).foregroundStyle(.secondary).monospacedDigit()
+                }
+                Spacer()
+                if let t = n.createdAt { Text(when(t)).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
+            }
+            .padding(.vertical, 6).padding(.horizontal, 10)
+            .background(isNew ? Color.accentColor.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("פתיחת הדף של \(name)")
+    }
+
+    /// "14:05" for today, "5/11 14:05" otherwise.
+    private func when(_ ms: Double) -> String {
+        let date = Date(timeIntervalSince1970: ms / 1000), day = dateStr(date)
+        let hm = String(format: "%02d:%02d", gregorian.component(.hour, from: date), gregorian.component(.minute, from: date))
+        return day == todayStr() ? model.fmt(hm) : "\(fmtDayMonth(day)) \(model.fmt(hm))"
     }
 
     private func card(_ r: ShiftRequest) -> some View {

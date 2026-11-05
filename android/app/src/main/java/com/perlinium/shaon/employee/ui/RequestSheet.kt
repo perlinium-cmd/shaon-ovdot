@@ -50,19 +50,27 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.perlinium.shaon.employee.data.Repo
 import com.perlinium.shaon.employee.data.Shift
+import com.perlinium.shaon.employee.logic.directAdd
+import com.perlinium.shaon.employee.logic.directFix
 import com.perlinium.shaon.employee.logic.fmtHM
 import com.perlinium.shaon.employee.logic.fmtLongDate
 import com.perlinium.shaon.employee.logic.isOvernight
+import com.perlinium.shaon.employee.logic.overlapsAny
 import com.perlinium.shaon.employee.logic.parseDate
 import com.perlinium.shaon.employee.logic.shiftMinutes
+import com.perlinium.shaon.employee.logic.spanMillis
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** Ask to fix a shift (shift != null) or to add one that was never clocked (shift == null). */
+/**
+ * Fix a shift (shift != null) or add one that was never clocked (shift == null).
+ * Changes within the limits of logic/Direct.kt are saved right away; anything else becomes a request.
+ * onDone(message, wasRequest).
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun RequestSheet(shift: Shift?, onClose: () -> Unit, onSent: (String) -> Unit) {
+fun RequestSheet(shift: Shift?, onClose: () -> Unit, onDone: (String, Boolean) -> Unit) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val view = LocalView.current
     val isFix = shift != null
@@ -74,6 +82,16 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onSent: (String) -> Unit) {
     var picking by remember { mutableStateOf<String?>(null) }   // "in" | "out" | "date"
     var error by remember { mutableStateOf<String?>(null) }
 
+    val now = System.currentTimeMillis()
+    val unchanged = isFix && tin == shift!!.`in` && (if (running) tout.isEmpty() else tout == shift.out)
+    val ready = tin.isNotEmpty() && (running || tout.isNotEmpty()) && tin != tout && !unchanged
+    val direct = when {
+        !ready -> null
+        isFix -> directFix(shift!!, tin, tout, now)
+        else -> directAdd(date, tin, tout, now)
+    }
+    val needsApproval = ready && direct == null   // decided only once there is something to save
+
     val reasons = if (isFix) listOf("שכחתי ללחוץ כניסה", "שכחתי ללחוץ יציאה", "לחצתי בשעה לא נכונה") else listOf("שכחתי ללחוץ כניסה", "לא היה לי את הטלפון", "הטלפון היה כבוי")
 
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheet, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -81,14 +99,15 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onSent: (String) -> Unit) {
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 20.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(if (isFix) "תיקון משמרת" else "הוספת משמרת שנשכחה", style = MaterialTheme.typography.headlineSmall)
-            Text("השעות ישתנו רק אחרי שהמנהל יאשר.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (isFix) "תיקון משמרת" else "הוספת משמרת", style = MaterialTheme.typography.headlineSmall)
+            if (needsApproval) {
+                Text("השעות ישתנו רק אחרי שהמנהל יאשר.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
 
             Field("יום", fmtLongDate(parseDate(date)), enabled = !isFix) { picking = "date" }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Field("כניסה", tin.ifEmpty { "בחירה" }, Modifier.weight(1f)) { picking = "in" }
-                if (running) Field("יציאה", "עדיין במשמרת", Modifier.weight(1f), enabled = false) {}
-                else Field("יציאה", tout.ifEmpty { "בחירה" }, Modifier.weight(1f)) { picking = "out" }
+                Field("יציאה", tout.ifEmpty { if (running) "עדיין במשמרת" else "בחירה" }, Modifier.weight(1f)) { picking = "out" }
             }
             if (tin.isNotEmpty() && tout.isNotEmpty() && tin != tout) {
                 Text(
@@ -97,32 +116,45 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onSent: (String) -> Unit) {
                 )
             }
 
-            Text("מה קרה?", style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                reasons.forEach { r -> FilterChip(selected = note == r, onClick = { note = if (note == r) "" else r }, label = { Text(r) }) }
+            if (needsApproval) {
+                Text("מה קרה?", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    reasons.forEach { r -> FilterChip(selected = note == r, onClick = { note = if (note == r) "" else r }, label = { Text(r) }) }
+                }
+                OutlinedTextField(note, { note = it.take(500) }, Modifier.fillMaxWidth(), label = { Text("הערה למנהל (לא חובה)") }, minLines = 2)
             }
-            OutlinedTextField(note, { note = it.take(500) }, Modifier.fillMaxWidth(), label = { Text("הערה למנהל (לא חובה)") }, minLines = 2)
 
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             Button(
                 onClick = {
+                    val endAt = if (tin.isNotEmpty() && tout.isNotEmpty() && tin != tout) spanMillis(date, tin, tout).second else null
                     error = when {
                         tin.isEmpty() -> "צריך לבחור שעת כניסה"
                         !running && tout.isEmpty() -> "צריך לבחור שעת יציאה"
-                        !running && tin == tout -> "שעת היציאה זהה לשעת הכניסה"
+                        tout.isNotEmpty() && tin == tout -> "שעת היציאה זהה לשעת הכניסה"
                         parseDate(date).isAfter(LocalDate.now()) -> "אי אפשר לבקש על יום שעוד לא הגיע"
-                        isFix && tin == shift!!.`in` && (running || tout == shift.out) -> "לא שינית אף שעה"
+                        unchanged -> "לא שינית אף שעה"
+                        endAt != null && endAt > now + 60_000 -> "שעת היציאה עוד לא הגיעה"
+                        !isFix && direct != null && overlapsAny(direct.inAt, direct.outAt!!, sameDays(date), now) -> "בשעות האלה כבר רשומה משמרת"
                         else -> null
                     }
                     if (error == null) {
                         view.confirmTick()
-                        Repo.sendRequest(if (isFix) "fix" else "add", shift?.id, date, tin, if (running) "" else tout, note)
-                        onSent("הבקשה נשלחה למנהל")
+                        val saved = when {
+                            direct == null -> false
+                            isFix -> Repo.fixEarlier(shift!!, tin, tout, direct)
+                            else -> Repo.addManualShift(date, tin, tout, direct)
+                        }
+                        if (saved) onDone(if (tout.isEmpty()) "נשמר: כניסה ב-$tin" else "נשמר: $tin–$tout", false)
+                        else {
+                            Repo.sendRequest(if (isFix) "fix" else "add", shift?.id, date, tin, tout, note)
+                            onDone("הבקשה נשלחה למנהל", true)
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 shape = RoundedCornerShape(16.dp),
-            ) { Text("שליחה לאישור", style = MaterialTheme.typography.titleMedium) }
+            ) { Text(if (needsApproval) "שליחה לאישור" else "שמירה", style = MaterialTheme.typography.titleMedium) }
         }
     }
 
@@ -134,6 +166,14 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onSent: (String) -> Unit) {
         ) { v -> if (picking == "in") tin = v else tout = v; picking = null; error = null }
         "date" -> DateDialog(date, onDismiss = { picking = null }) { date = it; picking = null; error = null }
     }
+}
+
+/** Her other shifts around [date] (for the overlap check), incl. the running one. */
+private fun sameDays(date: String): List<Shift> {
+    val d = parseDate(date)
+    val near = setOf(d.minusDays(1).toString(), date, d.plusDays(1).toString())
+    val list = (Repo.recentShifts.value + (Repo.monthShifts.value ?: emptyList()) + listOfNotNull(Repo.openShift.value))
+    return list.distinctBy { it.id }.filter { it.date in near && (it.open || it.out.isNotEmpty()) }
 }
 
 @Composable

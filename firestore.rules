@@ -167,20 +167,87 @@ service cloud.firestore {
         && request.time < before.outSyncedAt + duration.value(10, 'm');
     }
 
+    /* What the phone saves without approval comes with a notice for the manager, written in the same batch,
+       so it can't be skipped. The phone can add notices but never read them. */
+    function noticePath(owner, id) { return /databases/$(database)/documents/users/$(owner)/notices/$(id); }
+    function withNotice(owner, shiftId, d) {
+      return d.noticeId is string && getAfter(noticePath(owner, d.noticeId)).data.shiftId == shiftId;
+    }
+    function hoursAgo(h) { return nowMs() - h * 3600000; }
+
+    // A shift she forgot to clock, typed in on the day it ended (the app allows that day only;
+    // the 48 hours here leave room for a phone that was offline). Older ones go through a request.
+    function manualShift(owner, shiftId, d) {
+      return d.keys().hasOnly(['empId', 'date', 'month', 'in', 'out', 'inAt', 'outAt', 'syncedAt', 'source', 'open', 'manual', 'createdAt', 'deviceId', 'noticeId'])
+        && d.keys().hasAll(['empId', 'date', 'month', 'in', 'out', 'inAt', 'outAt', 'syncedAt', 'source', 'open', 'manual', 'deviceId', 'noticeId'])
+        && d.source == 'phone' && d.open == false && d.manual == true
+        && d.month is string && d.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && isDate(d.date) && d.date.matches(d.month + '-[0-9]{2}')
+        && isTime(d.in) && isTime(d.out) && d.in != d.out
+        && d.inAt is number && d.outAt is number
+        && d.outAt > d.inAt && d.outAt - d.inAt <= 24 * 3600000
+        && d.outAt > hoursAgo(48) && d.outAt < nowMs() + 600000
+        && d.syncedAt == request.time
+        && d.deviceId == request.auth.uid
+        && (!('createdAt' in d) || d.createdAt is number)
+        && withNotice(owner, shiftId, d);
+    }
+
+    // She remembered a little later that she came in, or left, earlier than she pressed. Moving a time
+    // earlier is saved without approval; a later time, or an older shift, still needs a request.
+    function earlierFix(owner, shiftId, b, a) {
+      return a.edited == true
+        && a.noticeId != b.get('noticeId', '') && withNotice(owner, shiftId, a)
+        && isTime(a.in) && a.inAt is number
+        && a.inAt <= b.inAt && a.inAt > b.inAt - 12 * 3600000
+        && (a.inAt != b.inAt || a.in == b.in)
+        && (
+          // still running, clock-in moved earlier
+          (b.open == true && a.open == true && a.out == '' && !('outAt' in a) && a.inAt < b.inAt)
+          // clocking out now, at the time she really left
+          || (b.open == true && a.open == false && isTime(a.out) && a.outAt is number
+              && a.outAt > a.inAt && a.outAt < nowMs() + 3600000 && a.outSyncedAt == request.time)
+          // a finished shift, shortly after it ended: earlier clock-in and/or earlier clock-out
+          || (b.open == false && a.open == false && isTime(a.out) && a.outAt is number
+              && a.outAt <= b.outAt && a.outAt > a.inAt
+              && (a.outAt != b.outAt || a.out == b.out)
+              && (a.inAt < b.inAt || a.outAt < b.outAt)
+              && b.outAt > hoursAgo(48))
+        );
+    }
+
     match /users/{owner}/shifts/{shiftId} {
       allow read: if ofMyEmp(owner, resource.data);
-      allow create: if ofMyEmp(owner, request.resource.data) && clockIn(request.resource.data);
+      allow create: if ofMyEmp(owner, request.resource.data)
+        && (clockIn(request.resource.data) || manualShift(owner, shiftId, request.resource.data));
       allow update: if ofMyEmp(owner, resource.data)
         && resource.data.get('source', '') == 'phone'
         && resource.data.get('paid', false) != true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['out', 'outAt', 'outSyncedAt', 'open'])
-        && (clockOut(resource.data, request.resource.data) || undoClockOut(resource.data, request.resource.data));
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['out', 'outAt', 'outSyncedAt', 'open'])
+            && (clockOut(resource.data, request.resource.data) || undoClockOut(resource.data, request.resource.data)))
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['in', 'inAt', 'out', 'outAt', 'outSyncedAt', 'open', 'edited', 'noticeId'])
+            && earlierFix(owner, shiftId, resource.data, request.resource.data))
+        );
       // "Undo" right after clocking in: only a phone shift that is still open and a few minutes old.
       allow delete: if ofMyEmp(owner, resource.data)
         && resource.data.get('source', '') == 'phone'
         && resource.data.get('open', false) == true
         && resource.data.get('paid', false) != true
         && request.time < resource.data.syncedAt + duration.value(10, 'm');
+    }
+
+    match /users/{owner}/notices/{noticeId} {
+      allow create: if ofMyEmp(owner, request.resource.data)
+        && request.resource.data.keys().hasOnly(['empId', 'type', 'shiftId', 'date', 'in', 'out', 'prevIn', 'prevOut', 'createdAt', 'deviceId'])
+        && request.resource.data.keys().hasAll(['empId', 'type', 'shiftId', 'date', 'in', 'out', 'createdAt', 'deviceId'])
+        && request.resource.data.type in ['manual', 'fix']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.deviceId == request.auth.uid
+        && isDate(request.resource.data.date) && isTime(request.resource.data.in)
+        && (isTime(request.resource.data.out) || request.resource.data.out == '')
+        && request.resource.data.shiftId is string
+        && getAfter(/databases/$(database)/documents/users/$(owner)/shifts/$(request.resource.data.shiftId)).data.get('noticeId', '') == noticeId;
     }
 
     function newRequest(owner, d) {

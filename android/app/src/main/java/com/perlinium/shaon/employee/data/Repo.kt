@@ -10,6 +10,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Source
+import com.perlinium.shaon.employee.logic.Direct
 import com.perlinium.shaon.employee.logic.dateStr
 import com.perlinium.shaon.employee.logic.hm
 import com.perlinium.shaon.employee.logic.monthStr
@@ -318,6 +319,50 @@ object Repo {
         db.document("${base(s)}/shifts/${shift.id}").update(mapOf(
             "out" to "", "outAt" to FieldValue.delete(), "outSyncedAt" to FieldValue.delete(), "open" to true,
         )).addOnFailureListener(fail("הביטול"))
+    }
+
+    // ---------------- saved without approval (see logic/Direct.kt) ----------------
+
+    private fun noticeData(s: Session, type: String, shiftId: String, date: String, tin: String, tout: String) = mutableMapOf<String, Any>(
+        "empId" to s.empId, "type" to type, "shiftId" to shiftId, "date" to date, "in" to tin, "out" to tout,
+        "createdAt" to FieldValue.serverTimestamp(), "deviceId" to s.deviceUid,
+    )
+
+    /** A forgotten shift typed in on the day it ended. Saved on the phone at once, like a clock-in. */
+    fun addManualShift(date: String, tin: String, tout: String, d: Direct): Boolean {
+        val s = session.value ?: return false
+        val ref = db.collection("${base(s)}/shifts").document()
+        val notice = db.collection("${base(s)}/notices").document()
+        db.batch().apply {
+            set(ref, mapOf(
+                "empId" to s.empId, "date" to date, "month" to date.substring(0, 7), "in" to tin, "out" to tout,
+                "inAt" to d.inAt, "outAt" to (d.outAt ?: return false), "syncedAt" to FieldValue.serverTimestamp(),
+                "source" to "phone", "open" to false, "manual" to true, "deviceId" to s.deviceUid,
+                "createdAt" to System.currentTimeMillis(), "noticeId" to notice.id,
+            ))
+            set(notice, noticeData(s, "manual", ref.id, date, tin, tout))
+        }.commit().addOnFailureListener(fail("המשמרת"))
+        return true
+    }
+
+    /** Clock-in and/or clock-out moved earlier. A running shift either keeps running or is clocked out at [newOut]. */
+    fun fixEarlier(shift: Shift, newIn: String, newOut: String, d: Direct): Boolean {
+        val s = session.value ?: return false
+        val ref = db.document("${base(s)}/shifts/${shift.id}")
+        val notice = db.collection("${base(s)}/notices").document()
+        val change = mutableMapOf<String, Any>("edited" to true, "noticeId" to notice.id)
+        if (newIn != shift.`in`) { change["in"] = newIn; change["inAt"] = d.inAt }
+        val closes = shift.open && d.outAt != null
+        if (d.outAt != null && (shift.open || newOut != shift.out)) { change["out"] = newOut; change["outAt"] = d.outAt }
+        if (closes) { change["outSyncedAt"] = FieldValue.serverTimestamp(); change["open"] = false }
+        if (shift.open) openShift.value = if (closes) null else shift.copy(`in` = newIn, inAt = d.inAt)   // instant UI
+        db.batch().apply {
+            update(ref, change)
+            set(notice, noticeData(s, "fix", shift.id, shift.date, newIn, if (closes || !shift.open) newOut else "").apply {
+                put("prevIn", shift.`in`); put("prevOut", shift.out)
+            })
+        }.commit().addOnFailureListener(fail("המשמרת"))
+        return true
     }
 
     // ---------------- requests ----------------

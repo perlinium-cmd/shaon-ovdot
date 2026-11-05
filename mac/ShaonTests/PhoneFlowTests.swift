@@ -123,6 +123,81 @@ final class PhoneFlowTests: XCTestCase {
         XCTAssertEqual(m.shifts?.first { $0.id == sid }?.rate, 40)
     }
 
+    // MARK: saved on the phone without approval (the manager only gets a notice)
+
+    func testNoticeWithServerTimestampIsNotDropped() {
+        let data: [String: Any] = ["empId": "e1", "type": "fix", "shiftId": "s1", "date": "2026-11-05", "in": "07:40", "out": "",
+                                   "prevIn": "08:10", "prevOut": "", "deviceId": "ph",
+                                   "createdAt": Timestamp(date: Date(timeIntervalSince1970: 1_793_888_041))]
+        let n = decodeDoc(Notice.self, id: "n", data)
+        XCTAssertNotNil(n, "a notice must never disappear from the Mac")
+        XCTAssertEqual(n?.createdAt ?? 0, 1_793_888_041_000, accuracy: 1)
+        XCTAssertEqual(n?.isSeen, false)
+        XCTAssertEqual(n?.movedIn, true)
+        XCTAssertEqual(n?.closedShift, false)
+    }
+
+    func testTypedInShiftCountsAndShowsAsNewUntilSeen() async throws {
+        let (m, store) = model()
+        let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 40))
+        let today = todayStr()
+        let sid = store.simulateManualShift(empId: empId, date: today, in: "07:00", out: "11:30")
+        await settle()
+        let s = try XCTUnwrap(m.shifts?.first { $0.id == sid })
+        XCTAssertEqual(m.pay(s), 4.5 * 40, accuracy: 0.001, "a typed-in shift is paid like any other")
+        XCTAssertNil(s.clockGapMinutes, "typed-in times are not a clock problem")
+        XCTAssertEqual(m.unseenNotices.count, 1)
+        XCTAssertEqual(m.describe(m.notices[0]).title, "נועה הזינה שעות")
+        XCTAssertTrue(m.describe(m.notices[0]).detail.contains("4:30"))
+        await m.markNoticesSeen()
+        await settle()
+        XCTAssertTrue(m.unseenNotices.isEmpty)
+        XCTAssertEqual(m.notices.count, 1, "seen updates stay on the list")
+    }
+
+    func testEarlierTimesDescribeWhatChanged() async throws {
+        let (m, store) = model()
+        let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 40))
+        let today = todayStr()
+        // Still at work, remembered she came in earlier.
+        let open = store.simulateClockIn(empId: empId, date: today, time: "08:10")
+        store.simulateEarlierFix(open, in: "07:50", out: "")
+        await settle()
+        var d = m.describe(m.notices[0])
+        XCTAssertEqual(d.title, "נועה תיקנה שעה")
+        XCTAssertTrue(d.detail.contains("כניסה 07:50 במקום 08:10"), d.detail)
+        XCTAssertEqual(m.openShift(of: empId)?.in, "07:50")
+        XCTAssertNil(m.openShift(of: empId)?.clockGapMinutes)
+        // Forgot to clock out: records when she really left.
+        try await Task.sleep(for: .milliseconds(5))
+        store.simulateEarlierFix(open, in: "07:50", out: "12:00")
+        await settle()
+        d = m.describe(m.notices[0])
+        XCTAssertEqual(d.title, "נועה רשמה שעת יציאה")
+        XCTAssertTrue(d.detail.contains("07:50–12:00"), d.detail)
+        XCTAssertNil(m.openShift(of: empId))
+        // Left earlier than she clocked out.
+        let done = store.simulateClockIn(empId: empId, date: today, time: "13:00")
+        store.simulateClockOut(done, time: "17:00")
+        try await Task.sleep(for: .milliseconds(5))
+        store.simulateEarlierFix(done, in: "13:00", out: "16:40")
+        await settle()
+        d = m.describe(m.notices[0])
+        XCTAssertTrue(d.detail.contains("יציאה 16:40 במקום 17:00"), d.detail)
+        XCTAssertFalse(d.detail.contains("כניסה"), d.detail)
+        XCTAssertEqual(m.unseenNotices.count, 3)
+    }
+
+    func testDeletingEmployeeRemovesHerNotices() async throws {
+        let (m, store) = model()
+        let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 40))
+        _ = store.simulateManualShift(empId: empId, date: todayStr(), in: "07:00", out: "09:00")
+        await settle()
+        await m.deleteEmployee(m.emp(empId)!)
+        await settle()
+        XCTAssertTrue(m.notices.isEmpty)
+    }
+
     func testPairingCodes() {
         let codes = (0..<500).map { _ in newPairingCode() }
         XCTAssertEqual(Set(codes).count, 500)

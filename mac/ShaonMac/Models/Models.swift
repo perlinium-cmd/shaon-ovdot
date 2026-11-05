@@ -38,14 +38,17 @@ struct Shift: Codable, Identifiable, Equatable {
     var deviceId: String?
     var fixedBy: String?      // id of the approved request that last changed this shift
     var requestId: String?    // for a shift added from a request
+    var manual: Bool?         // typed in on the phone after the shift (same day, no approval needed)
+    var edited: Bool?         // a time was moved earlier on the phone (no approval needed)
     var isPaid: Bool { paid == true }
     var isOpen: Bool { open == true }
     var fromPhone: Bool { source == "phone" }
+    var typedOnPhone: Bool { manual == true || edited == true }
 
     /// Phone clock vs. server clock, in minutes. Large when the phone's clock is wrong
     /// or when she clocked in/out without reception and it synced later.
     var clockGapMinutes: Double? {
-        guard fixedBy == nil else { return nil }   // times were changed on purpose
+        guard fixedBy == nil, !typedOnPhone else { return nil }   // times were changed on purpose
         var gaps: [Double] = []
         if let a = inAt, let b = syncedAt { gaps.append(abs(b - a) / 60000) }
         if let a = outAt, let b = outSyncedAt { gaps.append(abs(b - a) / 60000) }
@@ -82,6 +85,29 @@ struct ShiftRequest: Codable, Identifiable, Equatable {
     var createdAt: Double?
     var decidedAt: Double?
     var isPending: Bool { status == "pending" }
+}
+
+/// Something the phone saved without asking (users/{uid}/notices/{id}), so the manager hears about it:
+/// a forgotten shift typed in on the day it ended ("manual"), or a clock-in / clock-out moved earlier ("fix").
+/// The phone can add these but never read them (firestore.rules).
+struct Notice: Codable, Identifiable, Equatable {
+    var id: String = ""
+    var empId: String
+    var type: String          // "manual" | "fix"
+    var shiftId: String
+    var date: String
+    var `in`: String
+    var out: String           // "" = the shift is still running
+    var prevIn: String?       // "fix": the times before the change
+    var prevOut: String?      // "" = it was still running
+    var createdAt: Double?
+    var deviceId: String?
+    var seen: Bool?
+    var isSeen: Bool { seen == true }
+    /// A running shift closed at the time she really left (she forgot to clock out).
+    var closedShift: Bool { type == "fix" && (prevOut ?? "").isEmpty && !out.isEmpty }
+    var movedIn: Bool { type == "fix" && prevIn != nil && prevIn != `in` }
+    var movedOut: Bool { type == "fix" && !(prevOut ?? "").isEmpty && prevOut != out }
 }
 
 /// A short-lived code that connects a phone (pairings/{code}).

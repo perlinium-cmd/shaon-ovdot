@@ -32,4 +32,7 @@ protocol DataStore: AnyObject {
     func disconnect(_ d: Device) async throws
     /// Approve (applies the change to the shift) or reject a request.
     func decide(_ r: ShiftRequest, approve: Bool, rate: Double) async throws
+    /// Changes the phone saved without approval (newest first).
+    func watchNotices(_ cb: @escaping ([Notice]) -> Void) -> () -> Void
+    func markNoticesSeen(_ ids: [String]) async throws
 }

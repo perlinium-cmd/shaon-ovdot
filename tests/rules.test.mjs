@@ -344,3 +344,105 @@ describe('connected phone: correction requests', () => {
     await assertSucceeds(updateDoc(doc(ownerDb(), ref.path), { status: 'approved', decidedAt: serverTimestamp() }));
   });
 });
+
+describe('connected phone: saved without approval (with a notice for the manager)', () => {
+  beforeEach(() => pairPhone());
+  const shifts = (db) => collection(db, 'users', OWNER, 'shifts');
+  const notices = (db) => collection(db, 'users', OWNER, 'notices');
+
+  /** A forgotten shift typed in on the same day: the shift and its notice in one batch. */
+  function manual(db, over = {}, { notice = true, noticeOver = {} } = {}) {
+    const now = Date.now();
+    const sRef = doc(shifts(db));
+    const nRef = doc(notices(db));
+    const b = writeBatch(db);
+    b.set(sRef, {
+      empId: 'e1', date: '2026-11-05', month: '2026-11', in: '08:00', out: '12:00', inAt: now - 300 * MIN, outAt: now - 60 * MIN,
+      syncedAt: serverTimestamp(), source: 'phone', open: false, manual: true, createdAt: now, deviceId: 'phone1', noticeId: nRef.id, ...over,
+    });
+    if (notice) {
+      b.set(nRef, {
+        empId: 'e1', type: 'manual', shiftId: sRef.id, date: '2026-11-05', in: '08:00', out: '12:00',
+        createdAt: serverTimestamp(), deviceId: 'phone1', ...noticeOver,
+      });
+    }
+    return { commit: () => b.commit(), sRef, nRef };
+  }
+
+  /** Moves times of an existing phone shift, with its notice. */
+  function fix(db, id, change, { notice = true } = {}) {
+    const nRef = doc(notices(db));
+    const b = writeBatch(db);
+    b.update(u(db, 'shifts', id), { ...change, edited: true, noticeId: nRef.id });
+    if (notice) {
+      b.set(nRef, {
+        empId: 'e1', type: 'fix', shiftId: id, date: '2026-11-05', in: change.in ?? '08:14', out: change.out ?? '',
+        prevIn: '08:14', prevOut: '', createdAt: serverTimestamp(), deviceId: 'phone1',
+      });
+    }
+    return b.commit();
+  }
+  const clockIn = async () => (await addDoc(shifts(phoneDb()), clockInData())).id;
+
+  it('adds a forgotten shift of today; the manager can read the notice, the phone cannot', async () => {
+    const m = manual(phoneDb());
+    await assertSucceeds(m.commit());
+    await assertFails(getDoc(doc(phoneDb(), m.nRef.path)));
+    await assertFails(getDocs(notices(phoneDb())));
+    await assertSucceeds(getDoc(doc(ownerDb(), m.nRef.path)));
+  });
+  it('cannot add a shift without the notice, or a notice without a shift', async () => {
+    await assertFails(manual(phoneDb(), {}, { notice: false }).commit());
+    await assertFails(addDoc(notices(phoneDb()), {
+      empId: 'e1', type: 'manual', shiftId: 'm1', date: '2026-11-05', in: '08:00', out: '12:00', createdAt: serverTimestamp(), deviceId: 'phone1',
+    }));
+  });
+  it('an older shift, or one that has not ended yet, still needs a request', async () => {
+    const day = 24 * 60 * MIN;
+    await assertFails(manual(phoneDb(), { inAt: Date.now() - 3 * day - 300 * MIN, outAt: Date.now() - 3 * day }).commit());
+    await assertFails(manual(phoneDb(), { inAt: Date.now() - 60 * MIN, outAt: Date.now() + 120 * MIN }).commit());
+  });
+  it('cannot set a rate or paid flag, or add for another employee', async () => {
+    await assertFails(manual(phoneDb(), { rate: 100 }).commit());
+    await assertFails(manual(phoneDb(), { paid: true }).commit());
+    await assertFails(manual(phoneDb(), { empId: 'e2' }, { noticeOver: { empId: 'e2' } }).commit());
+  });
+
+  it('moves the clock-in of a running shift earlier', async () => {
+    const id = await clockIn();
+    await assertSucceeds(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN }));
+  });
+  it('a later clock-in, or far earlier, or without a notice, is refused', async () => {
+    const id = await clockIn();
+    await assertFails(fix(phoneDb(), id, { in: '09:00', inAt: Date.now() + 30 * MIN }));
+    await assertFails(fix(phoneDb(), id, { in: '20:00', inAt: Date.now() - 13 * 60 * MIN }));
+    await assertFails(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN }, { notice: false }));
+  });
+  it('clocks out at the earlier time she really left', async () => {
+    const id = await clockIn();
+    await assertSucceeds(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 300 * MIN, out: '07:30', outAt: Date.now() - 240 * MIN, outSyncedAt: serverTimestamp(), open: false }));
+  });
+  it('moves the times of a shift that just ended earlier, never later', async () => {
+    const id = (await addDoc(shifts(phoneDb()), clockInData({ inAt: Date.now() - 300 * MIN }))).id;
+    const ref = u(phoneDb(), 'shifts', id);
+    const outAt = Date.now();
+    await updateDoc(ref, { out: '16:00', outAt, outSyncedAt: serverTimestamp(), open: false });
+    await assertFails(fix(phoneDb(), id, { out: '17:00', outAt: outAt + 60 * MIN }));
+    await assertSucceeds(fix(phoneDb(), id, { out: '15:00', outAt: outAt - 60 * MIN }));
+  });
+  it('not for a shift that ended days ago, a paid one, or one the manager entered', async () => {
+    const day = 24 * 60 * MIN;
+    await seed((db) => setDoc(u(db, 'shifts', 'old'), {
+      empId: 'e1', date: '2026-11-01', month: '2026-11', in: '08:00', out: '16:00', source: 'phone', open: false,
+      inAt: Date.now() - 4 * day, outAt: Date.now() - 4 * day + 480 * MIN, syncedAt: Timestamp.now(),
+    }));
+    await assertFails(fix(phoneDb(), 'old', { out: '15:00', outAt: Date.now() - 4 * day + 420 * MIN }));
+    await assertFails(fix(phoneDb(), 'paid1', { in: '07:00', inAt: Date.now() - 120 * MIN }));
+    await assertFails(fix(phoneDb(), 'm1', { in: '07:00', inAt: Date.now() - 120 * MIN }));
+  });
+  it('cannot slip other changes into a fix', async () => {
+    const id = await clockIn();
+    await assertFails(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN, rate: 99 }));
+    await assertFails(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN, date: '2026-11-04' }));
+  });
+});

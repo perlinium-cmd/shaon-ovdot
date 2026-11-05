@@ -62,7 +62,7 @@ final class FirestoreStore: DataStore {
     }
     func deleteEmployee(_ id: String) async throws {
         var refs = [doc("employees", id)]
-        for n in ["shifts", "payments", "devices", "deviceKeys", "requests"] {
+        for n in ["shifts", "payments", "devices", "deviceKeys", "requests", "notices"] {
             refs += try await col(n).whereField("empId", isEqualTo: id).getDocuments().documents.map(\.reference)
         }
         for chunk in stride(from: 0, to: refs.count, by: 400).map({ Array(refs[$0..<min($0 + 400, refs.count)]) }) {
@@ -136,6 +136,18 @@ final class FirestoreStore: DataStore {
             cb((snap?.documents ?? []).compactMap { self?.decode(ShiftRequest.self, id: $0.documentID, $0.data()) })
         }
         return { l.remove() }
+    }
+    func watchNotices(_ cb: @escaping ([Notice]) -> Void) -> () -> Void {
+        let l = col("notices").order(by: "createdAt", descending: true).limit(to: 150).addSnapshotListener { [weak self] snap, err in
+            if let err { self?.onError?(err); return }
+            cb((snap?.documents ?? []).compactMap { self?.decode(Notice.self, id: $0.documentID, $0.data()) })
+        }
+        return { l.remove() }
+    }
+    func markNoticesSeen(_ ids: [String]) async throws {
+        for chunk in stride(from: 0, to: ids.count, by: 400).map({ Array(ids[$0..<min($0 + 400, ids.count)]) }) {
+            let batch = db.batch(); chunk.forEach { batch.updateData(["seen": true], forDocument: doc("notices", $0)) }; try await batch.commit()
+        }
     }
     func createPairing(empId: String, empName: String) async throws -> Pairing {
         let p = Pairing(code: newPairingCode(), empId: empId, empName: empName, expiresAt: Date().addingTimeInterval(10 * 60))

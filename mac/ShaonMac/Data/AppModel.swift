@@ -14,8 +14,12 @@ final class AppModel {
     var devices: [Device] = []
     var requests: [ShiftRequest] = []
     var pendingRequests: [ShiftRequest] { requests.filter(\.isPending).sorted { ($0.createdAt ?? 0) < ($1.createdAt ?? 0) } }
+    var notices: [Notice] = []   // newest first
+    var unseenNotices: [Notice] { notices.filter { !$0.isSeen } }
     @ObservationIgnored private var seenOpen: Set<String>?
     @ObservationIgnored private var seenRequests: Set<String>?
+    /// Notices already shown as a notification, kept across launches so ones that came in while the Mac was off still notify once.
+    @ObservationIgnored private var notifiedNotices: Set<String> = []
     @ObservationIgnored var undoManager: UndoManager?
     @ObservationIgnored private var unsubs: [() -> Void] = []
     @ObservationIgnored private var unsubShifts: (() -> Void)?
@@ -24,12 +28,14 @@ final class AppModel {
 
     init(store: DataStore) {
         self.store = store
+        if !store.isDemo { notifiedNotices = Set(UserDefaults.standard.stringArray(forKey: "notifiedNotices") ?? []) }
         unsubs.append(store.watchSettings { [weak self] in self?.settings = $0 })
         unsubs.append(store.watchEmployees { [weak self] in self?.employees = $0.sorted { $0.name.localizedCompare($1.name) == .orderedAscending } })
         subscribeShifts()
         unsubs.append(store.watchOpenShifts { [weak self] in self?.openShiftsChanged($0) })
         unsubs.append(store.watchDevices { [weak self] in self?.devices = $0.sorted { ($0.pairedAt ?? 0) < ($1.pairedAt ?? 0) } })
         unsubs.append(store.watchRequests { [weak self] in self?.requestsChanged($0) })
+        unsubs.append(store.watchNotices { [weak self] in self?.noticesChanged($0) })
         if !store.isDemo {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
             widgetSync = WidgetSync(store: store)
@@ -57,6 +63,7 @@ final class AppModel {
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(2))
                     guard let self, let s = self.shifts?.first(where: { $0.id == id }), !s.out.isEmpty else { return }
+                    if self.notices.contains(where: { $0.shiftId == id && $0.closedShift }) { return }   // she typed the time: told by its notice
                     self.notify("\(self.emp(s.empId)?.name ?? "עובדת") יצאה מהעבודה", "\(self.fmt(s.in))–\(self.fmt(s.out)) · \(fmtHM(shiftMinutes(s.in, s.out))) שעות")
                 }
             }
@@ -73,6 +80,36 @@ final class AppModel {
         }
         seenRequests = pending
         requests = list
+    }
+    private func noticesChanged(_ list: [Notice]) {
+        notices = list
+        let fresh = list.filter { !$0.isSeen && !notifiedNotices.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+        notifiedNotices.formUnion(fresh.map(\.id))
+        if notifiedNotices.count > 400 { notifiedNotices.formIntersection(Set(list.map(\.id))) }   // forget old ones
+        if !store.isDemo { UserDefaults.standard.set(Array(notifiedNotices), forKey: "notifiedNotices") }
+        Task { @MainActor [weak self] in
+            for _ in 0..<50 where self?.employees == nil { try? await Task.sleep(for: .milliseconds(200)) }   // for her name
+            guard let self else { return }
+            if fresh.count > 3 { self.notify("\(fresh.count) עדכוני שעות מהטלפון", "אפשר לראות אותם בעמוד הבקשות והעדכונים"); return }
+            for n in fresh.reversed() { let d = self.describe(n); self.notify(d.title, d.detail) }
+        }
+    }
+    /// Title and detail line for a change the phone saved without approval.
+    func describe(_ n: Notice) -> (title: String, detail: String) {
+        let name = emp(n.empId)?.name ?? "עובדת"
+        let day = "\(fmtWeekday(n.date)) \(fmtDayMonth(n.date))"
+        let span = n.out.isEmpty ? "כניסה ב-\(fmt(n.in)), עדיין במשמרת" : "\(fmt(n.in))–\(fmt(n.out)) · \(fmtHM(shiftMinutes(n.in, n.out))) שעות"
+        let movedIn = n.movedIn ? "כניסה \(fmt(n.in)) במקום \(fmt(n.prevIn ?? ""))" : nil
+        let movedOut = n.movedOut ? "יציאה \(fmt(n.out)) במקום \(fmt(n.prevOut ?? ""))" : nil
+        if n.type == "manual" { return ("\(name) הזינה שעות", "\(day) · \(span)") }
+        if n.closedShift { return ("\(name) רשמה שעת יציאה", ([day, span] + [movedIn].compactMap { $0 }).joined(separator: " · ")) }
+        return ("\(name) תיקנה שעה", ([day] + [movedIn, movedOut].compactMap { $0 }).joined(separator: " · "))
+    }
+    func markNoticesSeen() async {
+        let ids = unseenNotices.map(\.id)
+        guard !ids.isEmpty else { return }
+        do { try await store.markNoticesSeen(ids) } catch { print(error) }
     }
     func openShift(of empId: String) -> Shift? { openShifts.filter { $0.empId == empId }.max { ($0.inAt ?? 0) < ($1.inAt ?? 0) } }
     func devices(of empId: String) -> [Device] { devices.filter { $0.empId == empId } }
