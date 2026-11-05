@@ -19,13 +19,33 @@ android {
         buildConfigField("boolean", "USE_EMULATOR", (project.findProperty("emulator") == "true").toString())
     }
 
+    // Release key lives outside the repo (~/.gradle/gradle.properties -> SHAON_*). It must be kept forever:
+    // updates only install over an app signed with the same key.
+    val storeFilePath = project.findProperty("SHAON_STORE_FILE") as String?
+    signingConfigs {
+        if (storeFilePath != null) create("release") {
+            storeFile = file(storeFilePath)
+            storePassword = project.property("SHAON_STORE_PASSWORD") as String
+            keyAlias = project.property("SHAON_KEY_ALIAS") as String
+            keyPassword = project.property("SHAON_KEY_PASSWORD") as String
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
+        }
+        // The exact release build (R8, release key) pointed at the local emulators: ./gradlew assembleQa -Pemulator=true
+        create("qa") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
         }
     }
+    sourceSets["qa"].res.srcDir("src/debug/res")
+    sourceSets["qa"].manifest.srcFile("src/debug/AndroidManifest.xml")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
