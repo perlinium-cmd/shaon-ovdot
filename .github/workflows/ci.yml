@@ -8,7 +8,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 26+: has Temporal, which the property tests use to check real hours (the nights the clock moves)
+          node-version: 26
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -17,7 +18,7 @@ jobs:
         run: for f in public/*.js; do node --check "$f"; done
       - name: Install test dependencies
         run: npm ci
-      - name: Pay calculation tests (shared cases)
+      - name: Pay calculation tests (shared cases + 100,000 random shifts against an independent oracle)
         run: npm test
       - name: Firestore security rules tests (emulator)
         run: npm run test:rules

@@ -7,10 +7,12 @@ final class PayTests: XCTestCase {
     }
 
     func testMinutes() {
-        XCTAssertEqual(shiftMinutes("08:00", "16:30"), 510)
-        XCTAssertEqual(shiftMinutes("22:00", "06:00"), 480)   // overnight
+        XCTAssertEqual(shiftMinutes("2026-09-01", "08:00", "16:30"), 510)
+        XCTAssertEqual(shiftMinutes("2026-09-01", "22:00", "06:00"), 480)   // overnight
         XCTAssertTrue(isOvernight("22:00", "06:00"))
-        XCTAssertEqual(shiftMinutes("", "06:00"), 0)
+        XCTAssertEqual(shiftMinutes("2026-09-01", "", "06:00"), 0)
+        XCTAssertEqual(shiftMinutes("2026-10-24", "22:00", "06:00"), 540)   // the clock goes back that night
+        XCTAssertEqual(shiftMinutes("2026-03-26", "22:00", "06:00"), 420)   // and forward that night
     }
 
     func testPayRegularAndSpecial() {
@@ -35,6 +37,26 @@ final class PayTests: XCTestCase {
         XCTAssertEqual(a.minutes, 180)
         XCTAssertEqual(a.pay, 120, accuracy: 0.001)
         XCTAssertEqual(a.unpaid, 40, accuracy: 0.001)
+    }
+
+    func testTotalsAreExactSumsOfRows() {
+        // 3 × 215.625 → each row 215.63, the total 646.89 (not round(646.875) = 646.88), paid + left = total.
+        var list = (0..<3).map { i in Shift(id: "\(i)", empId: "e", date: "2026-09-0\(i + 1)", month: "2026-09", in: "08:07", out: "13:52", rate: 37.5) }
+        list[0].paid = true
+        let a = aggregate(list, employees: [], defaultRate: nil)["e"]!
+        XCTAssertEqual(a.payAgorot, 3 * 21563)
+        XCTAssertEqual(a.paidAgorot, 21563)
+        XCTAssertEqual(a.unpaid, 431.26)
+        XCTAssertEqual(fmtMoney(a.pay), fmtMoney(646.89))
+        XCTAssertEqual(a.unpaidShifts.count, 2)
+        XCTAssertFalse(a.allPaid)
+    }
+
+    func testOnlyRunningShiftIsNotPaid() {
+        let running = Shift(empId: "e", date: "2026-09-01", month: "2026-09", in: "08:00", out: "", rate: 40, open: true)
+        let a = aggregate([running], employees: [], defaultRate: nil)["e"]!
+        XCTAssertFalse(a.allPaid, "a running shift alone must not read as paid")
+        XCTAssertTrue(a.unpaidShifts.isEmpty)
     }
 
     func testParseTyped() {

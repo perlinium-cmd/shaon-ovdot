@@ -48,12 +48,13 @@ struct TimeField: View {
     private func sync() {
         invalid = false
         guard !value.isEmpty else { text = ""; return }
-        let p = value.split(separator: ":").compactMap { Int($0) }
-        ampm = p[0] < 12 ? "AM" : "PM"
-        text = model.twelve ? "\(p[0] % 12 == 0 ? 12 : p[0] % 12):" + String(format: "%02d", p[1]) : value
+        guard let m = parseHM(value) else { text = value; return }   // never crash on an odd stored time
+        let h = m / 60
+        ampm = h < 12 ? "AM" : "PM"
+        text = model.twelve ? "\(h % 12 == 0 ? 12 : h % 12):" + String(format: "%02d", m % 60) : value
     }
     private func commit() {
-        let digits = text.filter(\.isNumber)
+        let digits = text.filter { $0.isASCII && $0.isNumber }
         if digits.isEmpty { value = ""; invalid = false; return }
         guard let v = parseTyped(digits, ampm: model.twelve ? ampm : nil) else { invalid = true; return }
         invalid = false

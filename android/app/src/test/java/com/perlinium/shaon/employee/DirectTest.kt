@@ -6,6 +6,7 @@ import com.perlinium.shaon.employee.logic.directAdd
 import com.perlinium.shaon.employee.logic.directFix
 import com.perlinium.shaon.employee.logic.localMillis
 import com.perlinium.shaon.employee.logic.overlapsAny
+import com.perlinium.shaon.employee.logic.plainClockOutOk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -138,5 +139,32 @@ class DirectTest {
         val running = open(tin = "14:00")
         assertTrue("a running shift lasts until now", overlapsAny(at(today, "17:00"), at(today, "17:30"), listOf(running), now, zone))
         assertFalse(overlapsAny(at(today, "12:30"), at(today, "13:30"), listOf(morning, running), now, zone))
+    }
+
+    // A plain tap on "exit" only when the clock-in and exit times can tell how long she worked
+
+    private fun hours(h: Long) = h * 3600_000L
+
+    @Test fun plainClockOutWithinADay() {
+        val s = open(tin = "08:00")
+        assertTrue(plainClockOutOk(s, at(today, "16:30"), zone))
+        assertTrue("a night shift", plainClockOutOk(open(date = yesterday, tin = "22:00"), at(today, "06:00"), zone))
+        assertTrue("23 hours", plainClockOutOk(s, at(today, "08:00") + hours(23), zone))
+    }
+
+    @Test fun aDayOrMoreNeedsTheRealExitTime() {
+        val s = open(date = "2026-11-02", tin = "08:00")
+        // 08:00 to 09:00 three days later would be saved as a one-hour shift
+        assertFalse(plainClockOutOk(s, at("2026-11-05", "09:00"), zone))
+        assertFalse("exactly a day: in = out", plainClockOutOk(s, at("2026-11-03", "08:00"), zone))
+        assertFalse("a day and a bit", plainClockOutOk(s, at("2026-11-03", "08:30"), zone))
+    }
+
+    @Test fun nightsTheClockMovesStillMatch() {
+        // 22:00 to 06:00 across the autumn change is 9 real hours; the times say the same (see shared/pay-cases.json)
+        val autumn = open(date = "2026-10-24", tin = "22:00")
+        assertTrue(plainClockOutOk(autumn, localMillis("2026-10-25", "06:00", zone), zone))
+        val spring = open(date = "2026-03-26", tin = "22:00")
+        assertTrue(plainClockOutOk(spring, localMillis("2026-03-27", "06:00", zone), zone))
     }
 }

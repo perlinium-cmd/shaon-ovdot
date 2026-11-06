@@ -79,7 +79,7 @@ private fun RequestRow(r: ShiftRequest) {
             }
             Text(
                 "${fmtWeekday(r.date)} ${fmtDayMonth(r.date)} · " +
-                    if (r.out.isEmpty()) "כניסה ב-${r.`in`}" else "${r.`in`}–${r.out} · ${fmtHM(shiftMinutes(r.`in`, r.out))} שעות",
+                    if (r.out.isEmpty()) "כניסה ב-${r.`in`}" else "${r.`in`}–${r.out} · ${fmtHM(shiftMinutes(r.date, r.`in`, r.out))} שעות",
                 style = MaterialTheme.typography.bodyLarge.nums(),
             )
             r.note?.takeIf { it.isNotBlank() }?.let { Text("“$it”", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }

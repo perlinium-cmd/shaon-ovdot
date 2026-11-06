@@ -71,6 +71,20 @@ fun directFix(s: Shift, newIn: String, newOut: String, now: Long, zone: ZoneId =
     return if (inAt != oldInAt || outAt != oldOutAt) Direct(inAt, outAt) else null
 }
 
+/**
+ * Can a running shift be clocked out with a plain tap at [now] (exit = the time now)? Only when its clock-in and
+ * exit times tell exactly how long she worked. After a day or more they can't (08:00 to 09:00 the next day reads
+ * as one hour), so she has to say when she really left instead (the fix sheet; the manager is told).
+ */
+fun plainClockOutOk(s: Shift, now: Long, zone: ZoneId = zone()): Boolean {
+    val inAt = s.inAt ?: return true
+    val elapsed = (now - inAt) / 60_000
+    if (elapsed < 0) return true
+    val out = Instant.ofEpochMilli(now).atZone(zone).toLocalTime()
+    val recorded = shiftMinutes(s.date, s.`in`, "%02d:%02d".format(out.hour, out.minute))
+    return kotlin.math.abs(recorded - elapsed) <= 2
+}
+
 /** True if [a, b] overlaps any of the other shifts (open ones run until [now]). */
 fun overlapsAny(a: Long, b: Long, others: List<Shift>, now: Long, zone: ZoneId = zone()): Boolean = others.any { o ->
     val start = o.inAt ?: runCatching { localMillis(o.date, o.`in`, zone) }.getOrNull() ?: return@any false

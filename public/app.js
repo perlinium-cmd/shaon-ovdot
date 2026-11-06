@@ -1,5 +1,8 @@
 import { createStore } from './data.js';
-import { round2, shiftMinutes, isOvernight, specialMinutes, shiftPay as payFor } from './pay.js';
+import {
+  round2, toAgorot, shiftMinutes, wallMinutes, isOvernight, specialMinutes, shiftPayAgorot, aggregate, emptyAgg, unpaidOf,
+  effRate as rateOf, shiftRate as rateOfShift, parseAmount, parseTyped,
+} from './pay.js';
 
 /* =========================================================
    Helpers
@@ -13,7 +16,7 @@ const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const todayStr = () => toDateStr(new Date());
 const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return toDateStr(d); };
 const currentMonth = () => todayStr().slice(0, 7);
-const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const parseDate = (s) => { const [y, m, d] = String(s ?? '').split('-').map(Number); return new Date(y || 1970, (m || 1) - 1, d || 1); };
 const shiftMonthBy = (month, delta) => {
   const [y, m] = month.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
@@ -32,16 +35,13 @@ const fmtHours = (min) => {
   const h = min / 60;
   return h.toLocaleString('he-IL', { maximumFractionDigits: 2 });
 };
+/** Shekels (always shown to the agora; whole shekels without decimals). */
 const fmtMoney = (n) => {
-  const v = round2(n || 0);
-  return `${v.toLocaleString('he-IL', { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })} ₪`;
+  const a = toAgorot(n || 0) ?? 0;
+  return `${(a / 100).toLocaleString('he-IL', { minimumFractionDigits: a % 100 === 0 ? 0 : 2, maximumFractionDigits: 2 })} ₪`;
 };
-const parseRate = (v) => {
-  const s = String(v ?? '').trim().replace(',', '.');
-  if (s === '') return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? round2(n) : NaN;
-};
+/** A typed rate or number of hours: null if empty, NaN if invalid (see parseAmount in pay.js). */
+const parseRate = (v) => parseAmount(v);
 
 const avatarStyle = (name) => {
   let h = 0;
@@ -185,17 +185,6 @@ function fmtTime(t) {
   const [h, m] = t.split(':').map(Number);
   return `${h % 12 || 12}:${pad(m)} ${h < 12 ? 'AM' : 'PM'}`;
 }
-/** Parse typed digits ("8", "830", "0830", "8:30") → "HH:MM"; '' if empty, null if invalid.
- *  In AM/PM mode hours 1–12 use the given ampm; 0 or 13–23 are read as 24h. */
-function parseTyped(text, ampm) {
-  const d = String(text).replace(/\D/g, '').slice(0, 4);
-  if (!d) return '';
-  let h; let m;
-  if (d.length <= 2) { h = +d; m = 0; } else if (d.length === 3) { h = +d[0]; m = +d.slice(1); } else { h = +d.slice(0, 2); m = +d.slice(2); }
-  if (h > 23 || m > 59) return null;
-  if (ampm && h >= 1 && h <= 12) h = (h % 12) + (ampm === 'PM' ? 12 : 0);
-  return `${pad(h)}:${pad(m)}`;
-}
 const fmtToggleHTML = (lg = false) => `
   <div class="seg ${lg ? 'lg' : ''}" role="radiogroup" aria-label="תצוגת שעה">
     <button type="button" role="radio" data-fmt="24" aria-checked="${!is12()}">${lg ? '24 שעות (14:30)' : '24h'}</button>
@@ -230,29 +219,25 @@ let unsubs = [];
 let unsubShifts = null;
 let mounted = { key: null, view: null };
 
-const effRate = (emp) => (emp && emp.rate != null ? emp.rate : (state.settings?.defaultRate ?? 0));
-const shiftRate = (s, emp) => (s.rate != null ? s.rate : effRate(emp));
+const effRate = (emp) => rateOf(emp, state.settings?.defaultRate);
+const shiftRate = (s, emp) => rateOfShift(s, emp, state.settings?.defaultRate);
 const empById = (id) => state.employees?.find((e) => e.id === id);
-const sortShifts = (list) => [...list].sort((a, b) => (b.date.localeCompare(a.date)) || (b.in.localeCompare(a.in)));
+const str = (v) => (typeof v === 'string' ? v : '');
+const sortShifts = (list) => [...list].sort((a, b) => str(b.date).localeCompare(str(a.date)) || str(b.in).localeCompare(str(a.in)));
 
-/** Pay for one shift (see pay.js), using the current default rate. */
-function shiftPay(s, emp) { return payFor(s, emp, state.settings?.defaultRate); }
+/** Pay for one shift in whole agorot (see pay.js), using the current default rate. */
+const payA = (s, emp) => shiftPayAgorot(s, emp, state.settings?.defaultRate);
+/** Pay for one shift in shekels (a whole number of agorot). */
+const shiftPay = (s, emp) => payA(s, emp) / 100;
+const minutesOf = (s) => shiftMinutes(s.date, s.in, s.out);
 
 function monthAgg() { return aggOf(state.shifts || []); }
-/** Per-employee totals for any list of shifts: Map(empId → {shifts, minutes, pay, paidPay, paidCount}). */
-function aggOf(list) {
-  const map = new Map();
-  for (const s of list) {
-    const pay = shiftPay(s, empById(s.empId));
-    const a = map.get(s.empId) || emptyAgg();
-    a.shifts.push(s); a.minutes += shiftMinutes(s.in, s.out); a.pay += pay;
-    if (s.paid) { a.paidPay += pay; a.paidCount += 1; }
-    map.set(s.empId, a);
-  }
-  return map;
-}
-function emptyAgg() { return { shifts: [], minutes: 0, pay: 0, paidPay: 0, paidCount: 0 }; }
-const unpaidOf = (a) => round2(a.pay - a.paidPay);
+/** Per-employee totals for any list of shifts: Map(empId → {shifts, minutes, payA, paidA, pay, paidPay, paidCount}). */
+function aggOf(list) { return aggregate(list, empById, state.settings?.defaultRate); }
+/** Finished shifts not marked paid (a running shift has no pay yet). */
+const unpaidShifts = (a) => a.shifts.filter((s) => !s.paid && !s.open);
+/** Every finished shift is marked paid (and there is at least one). */
+const allPaid = (a) => a.shifts.some((s) => !s.open) && !unpaidShifts(a).length;
 const nShifts = (n) => (n === 1 ? 'משמרת אחת' : `${n} משמרות`);
 const byName = (a, b) => a.name.localeCompare(b.name, 'he');
 
@@ -277,13 +262,19 @@ function toast(msg, { error = false, undo = null } = {}) {
   toastTimer = setTimeout(() => el.classList.remove('show'), undo ? 6000 : error ? 4000 : 2200);
 }
 const fail = (e) => { console.error(e); toast('משהו השתבש, נסה שוב', { error: true }); };
+const isOffline = (e) => e?.code === 'unavailable' || navigator.onLine === false;
+const OFFLINE_RATE = 'אין חיבור לאינטרנט. שינוי תעריף צריך חיבור, כדי שכל המשמרות הקודמות יישארו בתעריף שבו עבדו. נסה שוב כשיש חיבור.';
 
 /** Run a change and offer "בטל" for a few seconds: puts back the given docs ({col, id})
- *  exactly as they were, and removes docs the action created (it returns them as [{col, id}]). */
+ *  exactly as they were, and removes docs the action created (it returns them as [{col, id}], or {created}).
+ *  `message` may be a function of the action's result; when it returns null nothing is shown (nothing changed). */
 async function withUndo(message, refs, action) {
   const snaps = await state.store.snapshot(refs);
-  const created = (await action()) || [];
-  toast(message, { undo: () => state.store.restore([...snaps, ...created.map((c) => ({ ...c, data: null }))]) });
+  const res = await action();
+  const created = Array.isArray(res) ? res : (res?.created || []);
+  const msg = typeof message === 'function' ? message(res) : message;
+  if (msg != null) toast(msg, { undo: () => state.store.restore([...snaps, ...created.map((c) => ({ ...c, data: null }))]) });
+  return res;
 }
 
 /* ---------- Payments ---------- */
@@ -291,24 +282,48 @@ const PAY_METHODS = ['מזומן', 'העברה בנקאית', 'ביט', 'פיי�
 const lastMethod = () => lsGet('payMethod') || 'מזומן';
 const fmtDate = (date) => { const d = parseDate(date); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
 const shiftRefs = (sh) => [{ col: 'shifts', id: sh.id }, ...(sh.paymentId ? [{ col: 'payments', id: sh.paymentId }] : [])];
-/** Mark shifts as paid and record them as one payment. Returns the created payment ref (for undo). */
+/** The shift as it is now (a list on screen, or a sheet left open, may be a moment old). */
+const fresh = (sh) => (state.shifts || []).find((x) => x.id === sh.id) || sh;
+/** Same special rate? (none, and one without a rate, are the same: both pay nothing extra). */
+function sameSpecial(a, b) {
+  const n = (sp) => (sp && typeof sp.rate === 'number' ? [sp.rate, typeof sp.hours === 'number' ? sp.hours : null] : null);
+  const x = n(a); const y = n(b);
+  return (!x && !y) || (!!x && !!y && x[0] === y[0] && x[1] === y[1]);
+}
+
+/** Mark shifts as paid and record them as one payment — in one write, so there is never a payment without its
+ *  shifts marked, or the other way round. Only shifts that are, right now, finished and not paid are included
+ *  (a second click, or another device that paid them meanwhile, can't pay twice).
+ *  Returns {created: [payment ref], amountA, count}. */
 async function payShifts(emp, list, { method = lastMethod(), date = todayStr() } = {}) {
-  const amount = round2(list.reduce((t, sh) => t + shiftPay(sh, emp), 0));
-  const ref = await state.store.addPayment({ empId: emp.id, date, amount, method, shiftIds: list.map((sh) => sh.id) });
-  await state.store.updateShifts(list.map((sh) => sh.id), { paid: true, paidAt: Date.now(), paymentId: ref.id });
+  const todo = list.map(fresh).filter((sh) => (state.shifts || []).some((x) => x.id === sh.id) && !sh.paid && !sh.open);
+  if (!todo.length) return { created: [], amountA: 0, count: 0 };
+  const amountA = todo.reduce((t, sh) => t + payA(sh, emp), 0);
+  const pid = state.store.newId('payments');
+  const now = Date.now();
+  await state.store.commit([
+    { op: 'set', col: 'payments', id: pid, data: { empId: emp.id, date, amount: amountA / 100, method, shiftIds: todo.map((sh) => sh.id), createdAt: now } },
+    ...todo.map((sh) => ({ op: 'update', col: 'shifts', id: sh.id, data: { paid: true, paidAt: now, paymentId: pid } })),
+  ]);
   lsSet('payMethod', method);
-  return [{ col: 'payments', id: ref.id }];
+  return { created: [{ col: 'payments', id: pid }], amountA, count: todo.length };
 }
-/** Remove the "paid" mark of one shift and take it out of its payment record. */
-async function unpayShift(sh, emp, payments) {
-  const p = sh.paymentId && payments.find((x) => x.id === sh.paymentId);
-  if (p) {
-    const ids = (p.shiftIds || []).filter((x) => x !== sh.id);
-    if (ids.length) await state.store.updatePayment(p.id, { shiftIds: ids, amount: round2(Math.max(0, p.amount - shiftPay(sh, emp))) });
-    else await state.store.deletePayment(p.id);
-  }
-  await state.store.updateShifts([sh.id], { paid: false, paidAt: null, paymentId: null });
+/** The writes that remove a shift's "paid" mark and take it out of its payment record (the record is deleted
+ *  when no shift is left in it). `deleting`: the shift itself is about to be deleted, so it isn't updated. */
+async function unpayOps(sh, emp, payments, { deleting = false } = {}) {
+  const cur = fresh(sh);
+  const ops = deleting ? [] : [{ op: 'update', col: 'shifts', id: cur.id, data: { paid: false, paidAt: null, paymentId: null } }];
+  if (!cur.paymentId) return ops;
+  let p = payments.find((x) => x.id === cur.paymentId);
+  if (!p) { const [snap] = await state.store.snapshot([{ col: 'payments', id: cur.paymentId }]); if (snap?.data) p = { id: snap.id, ...snap.data }; }
+  if (!p) return ops;
+  const ids = (p.shiftIds || []).filter((x) => x !== cur.id);
+  if (!ids.length) ops.push({ op: 'delete', col: 'payments', id: p.id });
+  else ops.push({ op: 'update', col: 'payments', id: p.id, data: { shiftIds: ids, amount: Math.max(0, (toAgorot(p.amount) ?? 0) - payA(cur, emp)) / 100 } });
+  return ops;
 }
+/** Remove the "paid" mark of one shift and take it out of its payment record, in one write. */
+async function unpayShift(sh, emp, payments) { await state.store.commit(await unpayOps(sh, emp, payments)); }
 const methodPicker = (cur) => `
   <div class="chips" role="radiogroup" aria-label="אמצעי תשלום">
     ${PAY_METHODS.map((m) => `<button type="button" class="chip" role="radio" data-method="${m}" aria-checked="${m === cur}" aria-pressed="${m === cur}">${m}</button>`).join('')}
@@ -322,7 +337,7 @@ const pickedMethod = (root) => root.querySelector('[data-method][aria-pressed="t
 
 /** Sheet: pay several shifts at once (choose method + date). */
 function paySheet(emp, list) {
-  const sum = list.reduce((t, sh) => t + shiftPay(sh, emp), 0);
+  const sum = list.reduce((t, sh) => t + payA(sh, emp), 0) / 100;
   openSheet(`
     <div class="sheet-head">
       <h2 id="sheet-title">תשלום ל${esc(emp.name)}</h2>
@@ -335,7 +350,9 @@ function paySheet(emp, list) {
   `, async (form) => {
     const method = pickedMethod(form);
     const date = $('#pay-date').value || todayStr();
-    await withUndo(`שולם ${fmtMoney(sum)} · ${method}`, list.map((sh) => ({ col: 'shifts', id: sh.id })), () => payShifts(emp, list, { method, date }));
+    const r = await withUndo((res) => (res.count ? `שולם ${fmtMoney(res.amountA / 100)} · ${nShifts(res.count)} · ${method}` : null),
+      list.map((sh) => ({ col: 'shifts', id: sh.id })), () => payShifts(emp, list, { method, date }));
+    if (!r.count) toast('המשמרות האלה כבר סומנו כשולמו');
     return true;
   });
   wireMethodPicker(sheet);
@@ -356,9 +373,14 @@ function paymentSheet(p, emp) {
   `, async (form, submitter) => {
     const ids = p.shiftIds || [];
     if (submitter?.value === 'delete') {
-      await withUndo('התשלום נמחק', [{ col: 'payments', id: p.id }, ...ids.map((id) => ({ col: 'shifts', id }))], async () => {
-        if (ids.length) await state.store.updateShifts(ids, { paid: false, paidAt: null, paymentId: null });
-        await state.store.deletePayment(p.id);
+      const refs = ids.map((id) => ({ col: 'shifts', id }));
+      await withUndo('התשלום נמחק', [{ col: 'payments', id: p.id }, ...refs], async () => {
+        // Only shifts that still exist and still belong to this payment lose their "paid" mark; all in one write.
+        const mine = (await state.store.snapshot(refs)).filter((s) => s.data && s.data.paymentId === p.id);
+        await state.store.commit([
+          ...mine.map((s) => ({ op: 'update', col: 'shifts', id: s.id, data: { paid: false, paidAt: null, paymentId: null } })),
+          { op: 'delete', col: 'payments', id: p.id },
+        ]);
       });
       return true;
     }
@@ -418,6 +440,9 @@ function confirmSheet({ title, text, okLabel, danger = true }) {
 function employeeSheet(emp = null) {
   const isNew = !emp;
   const agg = emp ? (monthAgg().get(emp.id) || emptyAgg()) : emptyAgg();
+  // A rate change never touches shifts that were already paid: what was paid stays what it was.
+  const unpaidHere = agg.shifts.filter((s) => !s.paid);
+  const paidHere = agg.shifts.length - unpaidHere.length;
   const def = state.settings?.defaultRate ?? 0;
   const startAvatar = emp?.avatar || randomAvatar();
   openSheet(`
@@ -455,10 +480,10 @@ function employeeSheet(emp = null) {
       <p class="field-hint">השאר ריק כדי להשתמש בתעריף הכללי (${fmtMoney(def)} לשעה).</p>
       <p class="field-error" id="err-rate"></p>
     </div>
-    ${!isNew && agg.shifts.length ? `
+    ${!isNew && unpaidHere.length ? `
     <label class="check" id="apply-wrap" hidden>
       <input type="checkbox" name="apply" checked>
-      <span>לעדכן את התעריף גם ב-${agg.shifts.length} המשמרות של ${esc(fmtMonth(state.month))}</span>
+      <span>לעדכן את התעריף גם ב${unpaidHere.length === 1 ? 'משמרת' : `-${unpaidHere.length} המשמרות`} של ${esc(fmtMonth(state.month))} שעוד לא שולמו${paidHere ? ` <span class="muted">(${paidHere === 1 ? 'משמרת ששולמה לא משתנה' : `${paidHere} משמרות ששולמו לא משתנות`})</span>` : ''}</span>
     </label>` : ''}
     <div class="sheet-actions">
       <button type="submit" class="btn btn-primary btn-lg">${isNew ? 'הוספה' : 'שמירה'}</button>
@@ -493,12 +518,19 @@ function employeeSheet(emp = null) {
       toast(`${name} נוספה`);
       location.hash = `#/e/${ref.id}`;
     } else {
+      const oldEff = effRate(emp);
       const newEff = rate != null ? rate : def;
-      // Past phone shifts keep the rate they were worked at (like shifts entered by hand).
-      if (newEff !== effRate(emp)) await state.store.lockRates(emp.id, effRate(emp));
+      if (newEff !== oldEff) {
+        // Past phone shifts keep the rate they were worked at (like shifts entered by hand). Needs the server.
+        try { await state.store.lockRates(emp.id, oldEff); } catch (e) {
+          if (!isOffline(e)) throw e;
+          $('#err-rate').textContent = OFFLINE_RATE; return false;
+        }
+      }
       await state.store.updateEmployee(emp.id, { name, rate, avatar: form.avatar.value });
-      if (form.apply?.checked && newEff !== effRate(emp)) {
-        await state.store.updateShifts(agg.shifts.map((s) => s.id), { rate: newEff });
+      if (form.apply?.checked && newEff !== oldEff) {
+        const ids = (state.shifts || []).filter((s) => s.empId === emp.id && !s.paid).map((s) => s.id);
+        if (ids.length) await state.store.updateShifts(ids, { rate: newEff });
       }
       toast('הפרטים נשמרו');
     }
@@ -644,8 +676,10 @@ const HomeView = {
       return;
     }
 
-    let totalMin = 0; let totalPay = 0;
-    agg.forEach((a) => { totalMin += a.minutes; totalPay += a.pay; });
+    // Totals of the employees on the list (the same ones the summary page adds up).
+    let totalMin = 0; let totalPayA = 0;
+    visible.forEach((e) => { const a = agg.get(e.id); if (a) { totalMin += a.minutes; totalPayA += a.payA; } });
+    const totalPay = totalPayA / 100;
 
     // Search + sort appear only when the list is long enough to need them
     const many = visible.length >= 5;
@@ -694,8 +728,8 @@ const HomeView = {
             </div>
             <div class="emp-card-stats">
               <div class="stat"><div class="stat-label">שעות</div><div class="stat-value num">${fmtHM(a.minutes)}</div></div>
-              <div class="stat"><div class="stat-label">${a.shifts.length && unpaidOf(a) <= 0 ? 'תשלום' : a.paidPay > 0 ? 'נותר לתשלום' : 'לתשלום'}</div>
-                <div class="stat-value num">${a.shifts.length && unpaidOf(a) <= 0 ? '<span class="paid-ok">שולם ✓</span>' : fmtMoney(unpaidOf(a))}</div></div>
+              <div class="stat"><div class="stat-label">${allPaid(a) ? 'תשלום' : a.paidA > 0 ? 'נותר לתשלום' : 'לתשלום'}</div>
+                <div class="stat-value num">${allPaid(a) ? '<span class="paid-ok">שולם ✓</span>' : fmtMoney(unpaidOf(a))}</div></div>
             </div>
           </a>`;
         }).join('')}
@@ -720,6 +754,7 @@ const EmployeeView = {
     this.payments = [];
     this.showAllPays = false;
     this.draftChecked = false;
+    this.busy = new Set(); // shifts whose "paid" mark is being changed right now (a second click waits)
     this.unsubPay?.();
     this.unsubPay = state.store.watchPayments(id, (list) => { this.payments = list; if (this.built) this.renderPayments(); }, onDataError);
     this.update();
@@ -956,7 +991,7 @@ const EmployeeView = {
       } else if (k === 'out' && this.form.in && !this.ampmManual?.out) {
         // pick AM/PM so the shift is the shortest one after clock-in (9:00 AM → "11" = 11:00 AM)
         const opts = ['AM', 'PM'].map((ap) => ({ ap, t: parseTyped(d, ap) }));
-        const dur = (t) => shiftMinutes(this.form.in, t) || 24 * 60; // same time as clock-in = not a shift
+        const dur = (t) => wallMinutes(this.form.in, t) || 24 * 60; // same time as clock-in = not a shift
         const best = opts.sort((x, y) => dur(x.t) - dur(y.t))[0];
         this.ampm.out = best.ap; this.syncAmpm('out'); v = best.t;
       }
@@ -1022,16 +1057,18 @@ const EmployeeView = {
       ul.innerHTML = `<li class="empty"><p class="muted">עוד אין משמרות ב${esc(fmtMonth(state.month))}.<br>הוסף משמרת בטופס${matchMedia('(min-width: 860px)').matches ? ' מימין' : ' למעלה'}.</p></li>`;
     } else {
       ul.innerHTML = list.map((s) => {
-        const min = shiftMinutes(s.in, s.out);
+        const min = minutesOf(s);
         const pay = shiftPay(s, emp);
         const d = parseDate(s.date);
         const sp = s.special && s.special.rate != null
           ? `<span class="sp-badge">מיוחד ${fmtMoney(s.special.rate)}${s.special.hours != null ? ` · ${fmtHours(specialMinutes(s))} ש׳` : ''}</span>` : '';
+        const moved = !s.open && min !== wallMinutes(s.in, s.out)
+          ? `<span class="night" title="בלילה הזה השעון זז (שעון קיץ/חורף), אז המשמרת ארכה בפועל ${fmtHM(min)} שעות">השעון זז</span>` : '';
         return `<li class="shift-row ${s.paid ? 'is-paid' : ''}">
           <button type="button" class="shift ${s.id === this.form.editingId ? 'selected' : ''}" data-id="${s.id}"
             aria-label="${fmtDayMonth(s.date)}, ${fmtTime(s.in)} עד ${fmtTime(s.out)}, ${fmtHM(min)} שעות, ${fmtMoney(pay)}. לחיצה לעריכה">
             <span class="shift-date"><span class="d num">${d.getDate()}</span><br><span class="w">${esc(fmtWeekday(s.date))}</span></span>
-            <span class="shift-times">${s.open ? `<span class="num">${fmtTime(s.in)} –</span> <span class="live-badge">במשמרת עכשיו</span>` : rng(s.in, s.out)}${s.source === 'phone' ? '<span class="src-badge" title="נרשם מהטלפון של העובדת">מהטלפון</span>' : ''}${isOvernight(s.in, s.out) ? '<span class="night">לילה</span>' : ''}${sp}${s.note ? `<span class="shift-note">${esc(s.note)}</span>` : ''}</span>
+            <span class="shift-times">${s.open ? `<span class="num">${fmtTime(s.in)} –</span> <span class="live-badge">במשמרת עכשיו</span>` : rng(s.in, s.out)}${s.source === 'phone' ? '<span class="src-badge" title="נרשם מהטלפון של העובדת">מהטלפון</span>' : ''}${isOvernight(s.in, s.out) ? '<span class="night">לילה</span>' : ''}${moved}${sp}${s.note ? `<span class="shift-note">${esc(s.note)}</span>` : ''}</span>
             <span class="shift-amount"><span class="h num">${s.open ? '—' : fmtHM(min)}</span><br><span class="p num">${s.open ? '—' : fmtMoney(pay)}</span></span>
           </button>
           <button type="button" class="paid-btn" data-paid="${s.id}" aria-pressed="${!!s.paid}" ${s.open && !s.paid ? 'disabled title="משמרת פעילה עדיין לא לתשלום"' : ''}
@@ -1042,25 +1079,32 @@ const EmployeeView = {
       }).join('');
       ul.querySelectorAll('.shift').forEach((b) => b.addEventListener('click', () => this.startEdit(b.dataset.id)));
       ul.querySelectorAll('.paid-btn').forEach((b) => b.addEventListener('click', async () => {
-        const sh = list.find((x) => x.id === b.dataset.paid);
+        const id = b.dataset.paid;
+        if (this.busy.has(id)) return; // still saving the previous click on this shift
+        const sh = (state.shifts || []).find((x) => x.id === id); // as it is now, not as it was drawn
         if (!sh || (sh.open && !sh.paid)) return;
         const paid = !sh.paid;
+        this.busy.add(id);
         b.setAttribute('aria-pressed', String(paid)); // instant feedback
         b.closest('.shift-row').classList.toggle('is-paid', paid);
         try {
-          if (paid) await withUndo(`סומן כשולם · ${lastMethod()}`, [{ col: 'shifts', id: sh.id }], () => payShifts(emp, [sh]));
-          else await withUndo('הסימון "שולם" הוסר', shiftRefs(sh), () => unpayShift(sh, emp, this.payments));
-        } catch (e) { fail(e); }
+          const who = this.emp() || emp; // her rate as it is now (it prices shifts that have none of their own)
+          if (paid) await withUndo((r) => (r.count ? `סומן כשולם · ${lastMethod()}` : null), [{ col: 'shifts', id }], () => payShifts(who, [sh]));
+          else await withUndo('הסימון "שולם" הוסר', shiftRefs(sh), () => unpayShift(sh, who, this.payments));
+        } catch (e) { fail(e); } finally {
+          this.busy.delete(id);
+          if (mounted.view === this && this.built) this.renderList(); // show what is really saved
+        }
       }));
     }
 
     const a = monthAgg().get(this.id) || emptyAgg();
     $('#totals').innerHTML = `
-      ${a.paidPay > 0
-        ? (unpaidOf(a) <= 0
-          ? `<div><div class="lbl">שולם הכל ✓</div><div class="val num">${fmtMoney(a.pay)}</div></div>`
-          : `<div><div class="lbl">נותר לתשלום · מתוך ${fmtMoney(a.pay)}</div><div class="val num">${fmtMoney(unpaidOf(a))}</div></div>`)
-        : `<div><div class="lbl">סה״כ ${esc(fmtMonthName(state.month))}</div><div class="val num">${fmtMoney(a.pay)}</div></div>`}
+      ${allPaid(a)
+        ? `<div><div class="lbl">שולם הכל ✓</div><div class="val num">${fmtMoney(a.pay)}</div></div>`
+        : a.paidA > 0
+          ? `<div><div class="lbl">נותר לתשלום · מתוך ${fmtMoney(a.pay)}</div><div class="val num">${fmtMoney(unpaidOf(a))}</div></div>`
+          : `<div><div class="lbl">סה״כ ${esc(fmtMonthName(state.month))}</div><div class="val num">${fmtMoney(a.pay)}</div></div>`}
       <div class="grp">
         <div><div class="lbl">שעות</div><div class="val num">${fmtHM(a.minutes)}</div></div>
         <div><div class="lbl">משמרות</div><div class="val num">${a.shifts.length}</div></div>
@@ -1070,11 +1114,11 @@ const EmployeeView = {
   renderPayments() {
     const card = $('#pay-card');
     if (!card) return;
-    const list = [...(this.payments || [])].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+    const list = [...(this.payments || [])].sort((a, b) => str(b.date).localeCompare(str(a.date)) || (b.createdAt || 0) - (a.createdAt || 0));
     card.hidden = !list.length;
     if (!list.length) { card.innerHTML = ''; return; }
     const shown = this.showAllPays ? list : list.slice(0, 5);
-    const total = list.reduce((t, p) => t + (p.amount || 0), 0);
+    const total = list.reduce((t, p) => t + (toAgorot(p.amount) ?? 0), 0) / 100;
     card.innerHTML = `
       <div class="list-head"><h2 id="pay-title">היסטוריית תשלומים</h2><span class="muted num">סה״כ ${fmtMoney(total)}</span></div>
       <ul class="pay-list">${shown.map((p) => `
@@ -1129,17 +1173,19 @@ const EmployeeView = {
 
     const pv = $('#preview');
     if (tin && tout && tin !== tout) {
-      const min = shiftMinutes(tin, tout);
+      const min = shiftMinutes(date, tin, tout);
       const editing = editingId && (state.shifts || []).find((s) => s.id === editingId);
       const rate = editing ? shiftRate(editing, this.emp()) : effRate(this.emp());
       const sp = this.form.special;
       const spValid = sp && sp.rate != null && !Number.isNaN(sp.rate) && !(sp.part && (sp.hours == null || Number.isNaN(sp.hours)));
-      const draft = { in: tin, out: tout, rate, special: spValid ? { rate: sp.rate, hours: sp.hours } : null };
+      const draft = { date, in: tin, out: tout, rate, special: spValid ? { rate: sp.rate, hours: sp.hours } : null };
       const spMin = specialMinutes(draft);
+      const wall = wallMinutes(tin, tout);
       pv.className = 'preview';
       pv.innerHTML = `
         <div><div class="big num">${fmtHM(min)} <span style="font-size:15px;font-weight:500">שעות</span></div>
         ${isOvernight(tin, tout) ? '<div class="field-hint">משמרת לילה – היציאה למחרת</div>' : ''}
+        ${min !== wall ? `<div class="field-hint">בלילה הזה השעון ${min < wall ? 'קפץ קדימה (מעבר לשעון קיץ)' : 'חזר אחורה (מעבר לשעון חורף)'}, אז בפועל עבדה ${fmtHM(min)} שעות ולא ${fmtHM(wall)}</div>` : ''}
         ${spMin ? `<div class="field-hint num">${spMin === min ? 'כל השעות' : `${fmtHM(spMin)} שעות`} ב-${fmtMoney(sp.rate)}${spMin < min ? ` · השאר ב-${fmtMoney(rate)}` : ''}</div>` : ''}</div>
         <div class="pay num">${fmtMoney(shiftPay(draft, this.emp()))}</div>`;
     } else {
@@ -1201,6 +1247,11 @@ const EmployeeView = {
     else if (!bad && sp?.part && (sp.hours == null || Number.isNaN(sp.hours) || sp.hours <= 0)) bad = [$('#sp-hours'), 'צריך להזין כמה שעות בתעריף המיוחד'];
     const special = sp ? { rate: sp.rate, hours: sp.part ? sp.hours : null } : null;
     const note = $('#f-note').value.trim() || null;
+    // A paid shift keeps what was paid for it: hours, date and rate can change only after removing the "paid" mark.
+    const cur = editingId && (state.shifts || []).find((x) => x.id === editingId);
+    if (!bad && cur?.paid && (cur.date !== date || cur.in !== tin || cur.out !== tout || !sameSpecial(cur.special, special))) {
+      bad = [this.fIn, 'המשמרת הזו כבר סומנה כשולמה, ולכן אי אפשר לשנות בה שעות, תאריך או תעריף. כדי לתקן, קודם מבטלים את הסימון "שולם" (ברשימה), ואז מעדכנים. אפשר לשנות רק את ההערה.'];
+    }
     if (bad) { bad[0].setAttribute('aria-invalid', 'true'); err.textContent = bad[1]; bad[0].focus(); return; }
 
     const btn = $('#entry button[type=submit]');
@@ -1217,7 +1268,7 @@ const EmployeeView = {
         this.renderActions();
       } else {
         await state.store.addShift({ empId: this.id, date, month, in: tin, out: tout, rate: effRate(this.emp()), special, note, paid: false });
-        toast(`נשמר: ${fmtDayMonth(date)} · ${fmtHM(shiftMinutes(tin, tout))} שעות`);
+        toast(`נשמר: ${fmtDayMonth(date)} · ${fmtHM(shiftMinutes(date, tin, tout))} שעות`);
       }
       this.clearDraft();
       lsSet(`last-${this.id}`, `${tin}-${tout}`);
@@ -1236,11 +1287,20 @@ const EmployeeView = {
   async remove() {
     const s = (state.shifts || []).find((x) => x.id === this.form.editingId);
     if (!s) return;
-    try {
-      await withUndo(`המשמרת של ${fmtDayMonth(s.date)} נמחקה`, shiftRefs(s), async () => {
-        if (s.paid) await unpayShift(s, this.emp(), this.payments);
-        await state.store.deleteShift(s.id);
+    if (s.paid) {
+      const ok = await confirmSheet({
+        title: 'למחוק משמרת ששולמה?',
+        text: `המשמרת של ${esc(fmtDayMonth(s.date))} כבר סומנה כשולמה (${fmtMoney(shiftPay(s, this.emp()))}). מחיקה תוריד אותה גם מרשומת התשלום.`,
+        okLabel: 'מחיקה',
       });
+      if (!ok) return;
+    }
+    try {
+      // One write: out of its payment record (if it was paid) and deleted — never only one of the two.
+      await withUndo(`המשמרת של ${fmtDayMonth(s.date)} נמחקה`, shiftRefs(s), async () => state.store.commit([
+        ...(s.paid ? await unpayOps(s, this.emp(), this.payments, { deleting: true }) : []),
+        { op: 'delete', col: 'shifts', id: s.id },
+      ]));
       this.stopEdit();
     } catch (e) { fail(e); }
   },
@@ -1329,13 +1389,15 @@ const SummaryView = {
       const rows = this.rowsFrom(list);
       this.currentRows = rows;
       const tMin = rows.reduce((t, r) => t + r.minutes, 0);
-      const tPay = rows.reduce((t, r) => t + r.pay, 0);
-      const tPaid = rows.reduce((t, r) => t + r.paidPay, 0);
+      // Totals add up whole agorot: exactly the sum of the rows.
+      const tPayA = rows.reduce((t, r) => t + r.payA, 0);
+      const tPaidA = rows.reduce((t, r) => t + r.paidA, 0);
+      const tPay = tPayA / 100; const tPaid = tPaidA / 100; const tLeft = (tPayA - tPaidA) / 100;
       const tShifts = rows.reduce((t, r) => t + r.shifts.length, 0);
       body = `
         ${this.mode === 'year' ? yearChart(list, this.year) : ''}
         <div class="kpis">
-          <div class="card kpi"><div class="stat-label">נותר לתשלום</div><div class="stat-value num">${fmtMoney(tPay - tPaid)}</div></div>
+          <div class="card kpi"><div class="stat-label">נותר לתשלום</div><div class="stat-value num">${fmtMoney(tLeft)}</div></div>
           <div class="card kpi"><div class="stat-label">שולם</div><div class="stat-value num">${fmtMoney(tPaid)}</div></div>
           <div class="card kpi"><div class="stat-label">שעות</div><div class="stat-value num">${fmtHM(tMin)}</div></div>
         </div>
@@ -1352,11 +1414,11 @@ const SummaryView = {
                   <div class="sub num">${nShifts(r.shifts.length)} · ${fmtHM(r.minutes)} שעות · ${rateTxt}</div>
                 </div>
                 <div><div class="pay num">${fmtMoney(r.pay)}</div>
-                  <div class="hrs num">${!r.shifts.length ? '—' : unpaidOf(r) <= 0 ? '<span class="paid-ok">שולם ✓</span>' : r.paidPay > 0 ? `נותר ${fmtMoney(unpaidOf(r))}` : 'לא שולם'}</div></div>
+                  <div class="hrs num">${!r.shifts.length ? '—' : allPaid(r) ? '<span class="paid-ok">שולם ✓</span>' : !unpaidShifts(r).length ? 'במשמרת עכשיו' : r.paidA > 0 ? `נותר ${fmtMoney(unpaidOf(r))}` : 'לא שולם'}</div></div>
               </li>`;
             }).join('')}
           </ul>
-          <div class="sum-total"><span>סה״כ ${esc(this.mode === 'month' ? 'החודש' : this.mode === 'year' ? 'השנה' : 'בטווח')}${tPaid > 0 ? ` · נותר ${fmtMoney(tPay - tPaid)}` : ''}</span><span class="val num">${fmtMoney(tPay)}</span></div>
+          <div class="sum-total"><span>סה״כ ${esc(this.mode === 'month' ? 'החודש' : this.mode === 'year' ? 'השנה' : 'בטווח')}${tPaidA > 0 ? ` · נותר ${fmtMoney(tLeft)}` : ''}</span><span class="val num">${fmtMoney(tPay)}</span></div>
         </section>` : `<div class="card empty"><p class="muted">אין משמרות בתקופה הזו.</p></div>`}
         <button class="btn btn-secondary btn-block export-btn" id="export" type="button" ${tShifts ? '' : 'disabled'}>${icon('download')}ייצוא לאקסל – ${esc(this.label())}</button>`;
     }
@@ -1383,11 +1445,14 @@ const SummaryView = {
 
 /** Column chart of pay per month (single series, no legend: the title names it). */
 function yearChart(list, year) {
-  const months = Array.from({ length: 12 }, () => ({ pay: 0, min: 0 }));
+  const months = Array.from({ length: 12 }, () => ({ payA: 0, pay: 0, min: 0 }));
   list.forEach((sh) => {
-    const m = months[+sh.date.slice(5, 7) - 1];
-    m.pay += shiftPay(sh, empById(sh.empId));
-    m.min += shiftMinutes(sh.in, sh.out);
+    const emp = empById(sh.empId);
+    const m = months[Number(String(sh.date).slice(5, 7)) - 1];
+    if (!emp || !m) return; // the same shifts the totals below count
+    m.payA += payA(sh, emp);
+    m.pay = m.payA / 100;
+    m.min += minutesOf(sh);
   });
   const max = Math.max(...months.map((m) => m.pay));
   const top = niceMax(max);
@@ -1449,9 +1514,9 @@ const ReportView = {
     const emp = empById(this.id);
     if (!emp) { el.innerHTML = `<div class="empty"><h2>העובדת לא נמצאה</h2><a class="btn btn-secondary" href="#/">חזרה</a></div>`; return; }
     const list = (state.shifts || []).filter((sh) => sh.empId === emp.id)
-      .sort((a, b) => a.date.localeCompare(b.date) || a.in.localeCompare(b.in));
+      .sort((a, b) => str(a.date).localeCompare(str(b.date)) || str(a.in).localeCompare(str(b.in)));
     const a = aggOf(list).get(emp.id) || emptyAgg();
-    const pays = this.payments.filter((p) => p.date.startsWith(state.month)).sort((x, y) => x.date.localeCompare(y.date));
+    const pays = this.payments.filter((p) => str(p.date).startsWith(state.month)).sort((x, y) => str(x.date).localeCompare(str(y.date)));
     const hasNotes = list.some((sh) => sh.note);
     el.innerHTML = `
       <div class="report-bar no-print">
@@ -1474,7 +1539,7 @@ const ReportView = {
             <tbody>${list.map((sh) => `<tr>
               <td class="num">${fmtDayMonth(sh.date)}</td><td>${esc(fmtWeekday(sh.date))}</td>
               <td class="num">${fmtTime(sh.in)}</td><td class="num">${fmtTime(sh.out)}</td>
-              <td class="num">${fmtHM(shiftMinutes(sh.in, sh.out))}</td>
+              <td class="num">${fmtHM(minutesOf(sh))}</td>
               <td class="num">${fmtMoney(shiftPay(sh, emp))}${sh.special?.rate != null ? ' *' : ''}</td>
               <td>${sh.paid ? '✓' : '—'}</td>${hasNotes ? `<td>${esc(sh.note || '')}</td>` : ''}
             </tr>`).join('')}</tbody>
@@ -1559,12 +1624,13 @@ const SettingsView = {
     const affected = () => {
       const r = parseRate(input.value);
       if (r == null || Number.isNaN(r) || r === state.settings.defaultRate) return [];
-      return (state.shifts || []).filter((s) => { const e = empById(s.empId); return e && e.rate == null; });
+      // Only shifts not paid yet: what was paid stays what it was.
+      return (state.shifts || []).filter((s) => { const e = empById(s.empId); return e && typeof e.rate !== 'number' && !s.paid; });
     };
     const sync = () => {
       const list = affected();
       applyWrap.hidden = !list.length;
-      $('#s-apply-txt').textContent = `לעדכן גם את ${list.length} המשמרות של ${fmtMonth(state.month)} (של עובדות בתעריף הכללי)`;
+      $('#s-apply-txt').textContent = `לעדכן גם את ${list.length === 1 ? 'המשמרת' : `${list.length} המשמרות`} של ${fmtMonth(state.month)} שעוד לא שולמו (של עובדות בתעריף הכללי)`;
     };
     input.addEventListener('input', sync);
 
@@ -1579,13 +1645,16 @@ const SettingsView = {
         const list = $('#s-apply').checked ? affected() : [];
         const old = state.settings.defaultRate;
         if (old != null && r !== old) {
-          for (const e of (state.employees || []).filter((x) => x.rate == null)) await state.store.lockRates(e.id, old);
+          // Past shifts of employees on the default rate keep the rate they were worked at. Needs the server.
+          for (const e of (state.employees || []).filter((x) => typeof x.rate !== 'number')) await state.store.lockRates(e.id, old);
         }
         await state.store.saveSettings({ defaultRate: r });
         if (list.length) await state.store.updateShifts(list.map((s) => s.id), { rate: r });
         toast('התעריף נשמר');
         applyWrap.hidden = true;
-      } catch (err) { fail(err); } finally { btn.classList.remove('is-loading'); btn.disabled = false; }
+      } catch (err) {
+        if (isOffline(err)) $('#s-rate-err').textContent = OFFLINE_RATE; else fail(err);
+      } finally { btn.classList.remove('is-loading'); btn.disabled = false; }
     });
     $('#signout').addEventListener('click', () => state.store.signOut());
     this.el.querySelectorAll('[data-sound]').forEach((b) => b.addEventListener('click', () => {
@@ -1798,14 +1867,16 @@ async function exportExcel(btn, allRows, tag) {
     const wb = XLSX.utils.book_new();
     wb.Workbook = { Views: [{ RTL: true }] };
     const hours = (min) => round2(min / 60);
+    const shekels = (a) => a / 100; // whole agorot → a number with at most 2 decimals
 
     const sum = [['עובדת', 'משמרות', 'שעות (עשרוני)', 'שעות (ש:ד)', 'תעריף לשעה', 'סה״כ (₪)', 'שולם (₪)', 'נותר לתשלום (₪)']];
     rows.forEach((r) => {
       const rates = [...new Set(r.shifts.map((s) => shiftRate(s, r.emp)))];
-      sum.push([r.emp.name, r.shifts.length, hours(r.minutes), fmtHM(r.minutes), rates.length > 1 ? 'משתנה' : rates[0], round2(r.pay), round2(r.paidPay), unpaidOf(r)]);
+      sum.push([r.emp.name, r.shifts.length, hours(r.minutes), fmtHM(r.minutes), rates.length > 1 ? 'משתנה' : rates[0], shekels(r.payA), shekels(r.paidA), shekels(r.payA - r.paidA)]);
     });
     const tMin = rows.reduce((s, r) => s + r.minutes, 0);
-    sum.push([], ['סה״כ', rows.reduce((s, r) => s + r.shifts.length, 0), hours(tMin), fmtHM(tMin), '', round2(rows.reduce((s, r) => s + r.pay, 0)), round2(rows.reduce((s, r) => s + r.paidPay, 0)), round2(rows.reduce((s, r) => s + r.pay - r.paidPay, 0))]);
+    const tPayA = rows.reduce((s, r) => s + r.payA, 0); const tPaidA = rows.reduce((s, r) => s + r.paidA, 0);
+    sum.push([], ['סה״כ', rows.reduce((s, r) => s + r.shifts.length, 0), hours(tMin), fmtHM(tMin), '', shekels(tPayA), shekels(tPaidA), shekels(tPayA - tPaidA)]);
     const ws = XLSX.utils.aoa_to_sheet(sum);
     ws['!cols'] = [{ wch: 18 }, { wch: 9 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, ws, 'סיכום');
@@ -1813,13 +1884,13 @@ async function exportExcel(btn, allRows, tag) {
     const used = new Set(['סיכום']);
     rows.forEach((r) => {
       const data = [['תאריך', 'יום', 'כניסה', 'יציאה', 'שעות (עשרוני)', 'שעות (ש:ד)', 'תעריף לשעה', 'תעריף מיוחד', 'שעות בתעריף מיוחד', 'סכום (₪)', 'שולם', 'הערה']];
-      [...r.shifts].sort((a, b) => a.date.localeCompare(b.date) || a.in.localeCompare(b.in)).forEach((s) => {
-        const min = shiftMinutes(s.in, s.out);
+      [...r.shifts].sort((a, b) => str(a.date).localeCompare(str(b.date)) || str(a.in).localeCompare(str(b.in))).forEach((s) => {
+        const min = minutesOf(s);
         const rate = shiftRate(s, r.emp);
         const d = parseDate(s.date);
-        data.push([`${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, fmtWeekday(s.date), fmtTime(s.in), fmtTime(s.out), hours(min), fmtHM(min), rate, s.special?.rate ?? '', s.special ? hours(specialMinutes(s)) : '', round2(shiftPay(s, r.emp)), s.paid ? 'כן' : 'לא', s.note || '']);
+        data.push([`${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, fmtWeekday(s.date), fmtTime(s.in), fmtTime(s.out), hours(min), fmtHM(min), rate, s.special?.rate ?? '', s.special ? hours(specialMinutes(s)) : '', shekels(payA(s, r.emp)), s.paid ? 'כן' : 'לא', s.note || '']);
       });
-      data.push([], ['סה״כ', '', '', '', hours(r.minutes), fmtHM(r.minutes), '', '', '', round2(r.pay), `שולם ${round2(r.paidPay)}`]);
+      data.push([], ['סה״כ', '', '', '', hours(r.minutes), fmtHM(r.minutes), '', '', '', shekels(r.payA), `שולם ${shekels(r.paidA)}`]);
       const sh = XLSX.utils.aoa_to_sheet(data);
       sh['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
       let name = r.emp.name.replace(/[[\]:*?/\\]/g, ' ').trim().slice(0, 28) || 'עובדת';

@@ -15,6 +15,7 @@ import com.perlinium.shaon.employee.logic.dateStr
 import com.perlinium.shaon.employee.logic.hm
 import com.perlinium.shaon.employee.logic.monthStr
 import com.perlinium.shaon.employee.logic.nowLocal
+import com.perlinium.shaon.employee.logic.plainClockOutOk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -297,12 +298,31 @@ object Repo {
     fun clockOut(shift: Shift): String? {
         val s = session.value ?: return null
         val now = System.currentTimeMillis()
+        if (!plainClockOutOk(shift, now)) return null   // a day or more: she has to say when she left (see clockOutOrAsk)
         val out = hm(nowLocal(now).toLocalTime())
         openShift.value = null
         db.document("${base(s)}/shifts/${shift.id}").update(mapOf(
             "out" to out, "outAt" to maxOf(now, shift.inAt ?: now), "outSyncedAt" to FieldValue.serverTimestamp(), "open" to false,
         )).addOnFailureListener(fail("היציאה"))
         return out
+    }
+
+    sealed interface ClockOut {
+        /** Saved; the exit time. */
+        data class Done(val out: String) : ClockOut
+        /** Less than a minute after clocking in: the clock-in was cancelled instead of saving an empty shift. */
+        data object Undone : ClockOut
+        /** Running for a day or more: the exit time can't be "now"; she has to enter when she really left. */
+        data object NeedsExitTime : ClockOut
+        data object Failed : ClockOut
+    }
+
+    /** The one clock-out used by every button (app, notification, tile, widget). */
+    fun clockOutOrAsk(shift: Shift): ClockOut {
+        val now = System.currentTimeMillis()
+        if (now - (shift.inAt ?: 0L) < 60_000) { undoClockIn(shift.id); return ClockOut.Undone }
+        if (!plainClockOutOk(shift, now)) return ClockOut.NeedsExitTime
+        return clockOut(shift)?.let { ClockOut.Done(it) } ?: ClockOut.Failed
     }
 
     /** Undo a clock-in pressed by mistake (only right after it). */

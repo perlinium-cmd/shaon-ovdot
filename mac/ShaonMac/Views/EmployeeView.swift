@@ -38,7 +38,10 @@ struct EmployeeView: View {
             .sheet(isPresented: $pairing) { PairSheet(emp: emp) }
             .confirmationDialog("למחוק \(confirmDelete?.count ?? 0) משמרות?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
                 Button("מחיקה", role: .destructive) { let ids = confirmDelete ?? []; selection = []; Task { await model.deleteShifts(ids) } }
-            } message: { Text("אפשר לבטל עם ⌘Z.") }
+            } message: {
+                let paid = shifts.filter { (confirmDelete ?? []).contains($0.id) && $0.isPaid }.count
+                Text(paid == 0 ? "אפשר לבטל עם ⌘Z." : "\(paid == 1 ? "משמרת אחת כבר סומנה כשולמה והיא תוסר" : "\(paid) משמרות כבר סומנו כשולמו והן יוסרו") גם מרשומת התשלום. אפשר לבטל עם ⌘Z.")
+            }
             .navigationTitle(emp.name)
         } else {
             ContentUnavailableView("העובדת לא נמצאה", systemImage: "person.slash")
@@ -87,17 +90,21 @@ struct EmployeeView: View {
                     if s.special?.rate != nil { Image(systemName: "star.fill").foregroundStyle(.orange).help("תעריף מיוחד") }
                 }
             }
-            TableColumn("סה״כ") { s in Text(s.isOpen ? "—" : fmtHM(shiftMinutes(s.in, s.out))).monospacedDigit() }.width(60)
+            TableColumn("סה״כ") { s in
+                let min = shiftMinutes(s.date, s.in, s.out)
+                Text(s.isOpen ? "—" : fmtHM(min)).monospacedDigit()
+                    .help(!s.isOpen && min != wallMinutes(s.in, s.out) ? "בלילה הזה השעון זז (שעון קיץ/חורף), אז המשמרת ארכה בפועל \(fmtHM(min)) שעות" : "")
+            }.width(60)
             TableColumn("סכום") { s in Text(s.isOpen ? "—" : fmtMoney(model.pay(s))).monospacedDigit().fontWeight(.medium) }.width(90)
             TableColumn("שולם") { s in
-                Toggle("שולם", isOn: Binding(get: { s.isPaid }, set: { v in Task { await model.setPaid([s.id], paid: v) } }))
+                Toggle("שולם", isOn: Binding(get: { s.isPaid }, set: { v in Task { if v { await model.markPaid([s.id]) } else { await model.markUnpaid([s.id]) } } }))
                     .labelsHidden().toggleStyle(.checkbox).disabled(s.isOpen && !s.isPaid)
             }.width(60)
         }
         .contextMenu(forSelectionType: String.self) { ids in
             if !ids.isEmpty {
-                Button("סימון כשולם") { Task { await model.setPaid(Array(ids), paid: true) } }
-                Button("סימון כלא שולם") { Task { await model.setPaid(Array(ids), paid: false) } }
+                Button("סימון כשולם") { Task { await model.markPaid(Array(ids)) } }
+                Button("סימון כלא שולם") { Task { await model.markUnpaid(Array(ids)) } }
                 Divider()
                 Button("מחיקה", role: .destructive) { confirmDelete = Array(ids) }
             }
@@ -108,16 +115,16 @@ struct EmployeeView: View {
     private func totals(_ a: Agg) -> some View {
         HStack(spacing: 24) {
             VStack(alignment: .leading) {
-                Text(a.paidPay > 0 ? (a.unpaid <= 0 ? "שולם הכל ✓" : "נותר לתשלום · מתוך \(fmtMoney(a.pay))") : "סה״כ \(fmtMonthName(model.month))")
+                Text(a.allPaid ? "שולם הכל ✓" : a.paidAgorot > 0 ? "נותר לתשלום · מתוך \(fmtMoney(a.pay))" : "סה״כ \(fmtMonthName(model.month))")
                     .font(.caption).foregroundStyle(.secondary)
-                Text(fmtMoney(a.paidPay > 0 && a.unpaid > 0 ? a.unpaid : a.pay)).font(.title2.weight(.bold)).monospacedDigit()
+                Text(fmtMoney(!a.allPaid && a.paidAgorot > 0 ? a.unpaid : a.pay)).font(.title2.weight(.bold)).monospacedDigit()
             }
             Spacer()
             stat("שעות", fmtHM(a.minutes))
             stat("משמרות", "\(a.shifts.count)")
-            if a.shifts.contains(where: { !$0.isPaid && !$0.isOpen }) {
-                Button { let ids = a.shifts.filter { !$0.isPaid && !$0.isOpen }.map(\.id); Task { await model.setPaid(ids, paid: true) } } label: { Label("סימון הכל כשולם", systemImage: "checkmark") }
-                    .help("משמרת שעדיין פעילה לא מסומנת")
+            if !a.unpaidShifts.isEmpty {
+                Button { let ids = a.unpaidShifts.map(\.id); Task { await model.markPaid(ids) } } label: { Label("סימון הכל כשולם", systemImage: "checkmark") }
+                    .help("רושם תשלום אחד על \(fmtMoney(Double(a.unpaidShifts.reduce(0) { $0 + shiftPayAgorot($1, model.emp($1.empId), defaultRate: model.defaultRate) }) / 100)) · \(model.payMethod). משמרת שעדיין פעילה לא מסומנת.")
             }
         }
         .padding(16)
@@ -168,8 +175,11 @@ struct EmployeeEditor: View {
         let r = parseRate(rate)
         if n.isEmpty { error = "צריך להזין שם"; return }
         if let r, r.isNaN { error = "תעריף לא תקין"; return }
-        if var emp { emp.name = n; emp.rate = r; await model.updateEmployee(emp) }
-        else { _ = await model.addEmployee(name: n, rate: r) }
+        if var emp {
+            emp.name = n; emp.rate = r
+            // Not saved (e.g. a rate change without internet): keep the form open, the message says why.
+            guard await model.updateEmployee(emp) else { return }
+        } else { _ = await model.addEmployee(name: n, rate: r) }
         dismiss()
     }
 }

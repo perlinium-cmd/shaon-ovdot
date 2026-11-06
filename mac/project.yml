@@ -78,7 +78,13 @@ targets:
   ShaonTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [ShaonTests]
+    sources:
+      - ShaonTests
+      # The cases all three apps are tested against, copied into the test bundle (read from there, not from the repo).
+      - path: ../shared/pay-cases.json
+        buildPhase: resources
+      - path: ../shared/money-cases.json
+        buildPhase: resources
     dependencies:
       - target: ShaonMac
     settings:

@@ -138,18 +138,30 @@ async function createFirebaseStore() {
     async countEmployeeShifts(id) {
       return (await fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', id)))).size;
     },
-    /** Everything that belongs to one employee, as {col, id, data} — used for delete + undo. */
+    /** Everything that belongs to one employee, as {col, id, data} — used for delete + undo.
+     *  Includes her phones (device + reconnect key), so a deleted employee's phone can't keep clocking in. */
     async employeeBundle(id) {
-      const [emp, shifts, pays] = await Promise.all([
-        fs.getDoc(docRef('employees', id)),
-        fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', id))),
-        fs.getDocs(fs.query(colRef('payments'), fs.where('empId', '==', id))),
-      ]);
+      const byEmp = (col) => fs.getDocs(fs.query(colRef(col), fs.where('empId', '==', id)));
+      const cols = ['shifts', 'payments', 'devices', 'deviceKeys', 'requests', 'notices'];
+      const [emp, ...lists] = await Promise.all([fs.getDoc(docRef('employees', id)), ...cols.map(byEmp)]);
       return [
         ...(emp.exists() ? [{ col: 'employees', id, data: emp.data() }] : []),
-        ...shifts.docs.map((d) => ({ col: 'shifts', id: d.id, data: d.data() })),
-        ...pays.docs.map((d) => ({ col: 'payments', id: d.id, data: d.data() })),
+        ...lists.flatMap((snap, i) => snap.docs.map((d) => ({ col: cols[i], id: d.id, data: d.data() }))),
       ];
+    },
+    /** A new document id, known before anything is written. */
+    newId: (col) => fs.doc(colRef(col)).id,
+    /** Several writes as one: all of them happen, or none (up to 450 per batch; [{op: set|update|delete, col, id, data}]). */
+    async commit(ops) {
+      for (let i = 0; i < ops.length; i += 450) {
+        const batch = fs.writeBatch(db);
+        for (const { op, col, id, data } of ops.slice(i, i + 450)) {
+          if (op === 'set') batch.set(docRef(col, id), data);
+          else if (op === 'update') batch.update(docRef(col, id), data);
+          else batch.delete(docRef(col, id));
+        }
+        await settle(batch.commit());
+      }
     },
     /** Current contents of the given docs ({col, id}) → [{col, id, data|null}]. */
     snapshot(items) {
@@ -166,10 +178,12 @@ async function createFirebaseStore() {
         await settle(batch.commit());
       }
     },
-    /** Before a rate change: write `rate` onto this employee's shifts that have none yet (shifts from her phone). */
+    /** Before a rate change: write `rate` onto this employee's shifts that have none yet (shifts from her phone),
+     *  so past work keeps the rate it was done at. Asks the server, not this device's copy, so no shift from a month
+     *  that was never opened here is missed; with no connection it throws (code 'unavailable') and nothing changes. */
     async lockRates(empId, rate) {
-      const snap = await fs.getDocs(fs.query(colRef('shifts'), fs.where('empId', '==', empId)));
-      const ids = snap.docs.filter((d) => d.data().rate == null).map((d) => d.id);
+      const snap = await fs.getDocsFromServer(fs.query(colRef('shifts'), fs.where('empId', '==', empId)));
+      const ids = snap.docs.filter((d) => typeof d.data().rate !== 'number').map((d) => d.id);
       for (let i = 0; i < ids.length; i += 400) {
         const batch = fs.writeBatch(db);
         ids.slice(i, i + 400).forEach((id) => batch.update(docRef('shifts', id), { rate }));
@@ -242,14 +256,27 @@ function createDemoStore() {
       }
       return out;
     },
-    async snapshot(items) { return items.map(({ col, id }) => ({ col, id, data: data[col][id] ? clone(data[col][id]) : null })); },
+    async snapshot(items) { return items.map(({ col, id }) => ({ col, id, data: data[col]?.[id] ? clone(data[col][id]) : null })); },
     async restore(snaps) {
       await delay();
-      snaps.forEach(({ col, id, data: d }) => { if (d) data[col][id] = clone(d); else delete data[col][id]; });
+      snaps.forEach(({ col, id, data: d }) => { data[col] ||= {}; if (d) data[col][id] = clone(d); else delete data[col][id]; });
+      persist();
+    },
+    newId: () => uid(),
+    async commit(ops) {
+      await delay();
+      // Same as a Firestore batch: an update of a missing document fails the whole batch.
+      if (ops.some(({ op, col, id }) => op === 'update' && !data[col]?.[id])) throw Object.assign(new Error('not found'), { code: 'not-found' });
+      for (const { op, col, id, data: d } of ops) {
+        data[col] ||= {};
+        if (op === 'set') data[col][id] = clone(d);
+        else if (op === 'update') data[col][id] = { ...data[col][id], ...clone(d) };
+        else delete data[col][id];
+      }
       persist();
     },
     async lockRates(empId, rate) {
-      Object.values(data.shifts).forEach((sh) => { if (sh.empId === empId && sh.rate == null) sh.rate = rate; });
+      Object.values(data.shifts).forEach((sh) => { if (sh.empId === empId && typeof sh.rate !== 'number') sh.rate = rate; });
       persist();
     },
     async getShiftsRange(from, to) {

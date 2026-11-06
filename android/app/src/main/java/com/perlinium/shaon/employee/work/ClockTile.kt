@@ -45,7 +45,7 @@ class ClockTile : TileService() {
             if (Repo.phase.value != Phase.Ready) return@launch
             if (!Repo.awaitOpenLoaded(4000)) return@launch   // unknown state: never guess between in and out
             val open = Repo.openShift.value
-            if (open != null) Repo.clockOut(open)?.let { out -> Notifier.clearShift(this@ClockTile); Notifier.done(this@ClockTile, open, out) }
+            if (open != null) Notifier.after(this@ClockTile, open, Repo.clockOutOrAsk(open))
             else Repo.clockIn()
             render()
         }

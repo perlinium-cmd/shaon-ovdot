@@ -15,6 +15,7 @@
 		16C1EBA5DA253EB2D89C1EDD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = EACDDB5510F6CE56DBF99CB2 /* FirebaseAuth */; };
 		17805D7EA176FBB9A928A017 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */; };
 		26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
+		270898A73F954E5ED82B2C2A /* pay-cases.json in Resources */ = {isa = PBXBuildFile; fileRef = 07B7FDA00A5AC8DA488FEC10 /* pay-cases.json */; };
 		33D2BA7510643BB93E7F7A90 /* MonthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024E3EE0A494B115B42C0C49 /* MonthWidget.swift */; };
 		34920B8BD6AFFAFA90CFC1C6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 916D5017F14840F6A30FB450 /* GoogleSignIn */; };
 		4CC85B34559E2A8918BA5337 /* EmployeeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */; };
@@ -46,6 +47,7 @@
 		D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9149960A6CA7DE765BE251B0 /* Haptics.swift */; };
 		D4CB958B5A4CA760AE3AB2AA /* EmployeeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */; };
 		D7B1A3B3BCB319FCF39D3899 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */; };
+		DA8F890F3FFA79AF3FC9F60A /* money-cases.json in Resources */ = {isa = PBXBuildFile; fileRef = 186200052F7B9A755804CC67 /* money-cases.json */; };
 		DE5882363DC9CAA5C2041158 /* TimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B7E28D470C20B8432B1EE0 /* TimeField.swift */; };
 		E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */; };
 		EAAB0A96940BB09E06B5C5A1 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
@@ -88,7 +90,9 @@
 		024E3EE0A494B115B42C0C49 /* MonthWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthWidget.swift; sourceTree = "<group>"; };
 		049DD412C39A517266CA24B4 /* ShaonMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShaonMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		06FD6CDA396753142860A60B /* FirestoreStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreStore.swift; sourceTree = "<group>"; };
+		07B7FDA00A5AC8DA488FEC10 /* pay-cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pay-cases.json"; sourceTree = "<group>"; };
 		07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeWidget.swift; sourceTree = "<group>"; };
+		186200052F7B9A755804CC67 /* money-cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "money-cases.json"; sourceTree = "<group>"; };
 		1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonMac.entitlements; sourceTree = "<group>"; };
 		21C8568915B8EA7C6D828CC9 /* QuickClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickClock.swift; sourceTree = "<group>"; };
@@ -236,6 +240,16 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		B4C1CB3C4C9E384DD854418F /* shared */ = {
+			isa = PBXGroup;
+			children = (
+				186200052F7B9A755804CC67 /* money-cases.json */,
+				07B7FDA00A5AC8DA488FEC10 /* pay-cases.json */,
+			);
+			name = shared;
+			path = ../shared;
+			sourceTree = "<group>";
+		};
 		BE9CDF1900CCDEFD8DBFD9A2 = {
 			isa = PBXGroup;
 			children = (
@@ -243,6 +257,7 @@
 				3EE6607CD9E86B2C3CD8509D /* ShaonTests */,
 				56003A4849C839925AE6BD54 /* ShaonWidgets */,
 				4191132A9417FB2E0C8D86F3 /* Shared */,
+				B4C1CB3C4C9E384DD854418F /* shared */,
 				CA1992C8BF070AD2836514D2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -310,6 +325,7 @@
 			buildConfigurationList = D90782B42919D330A6EFB14F /* Build configuration list for PBXNativeTarget "ShaonTests" */;
 			buildPhases = (
 				04F980C7B4A8E68FEF13CCCF /* Sources */,
+				B3E9CEBE4BD75BF574EE351C /* Resources */,
 			);
 			buildRules = (
 			);
@@ -395,6 +411,15 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B3E9CEBE4BD75BF574EE351C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DA8F890F3FFA79AF3FC9F60A /* money-cases.json in Resources */,
+				270898A73F954E5ED82B2C2A /* pay-cases.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CB22B30944697F6AA92ED5BE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;

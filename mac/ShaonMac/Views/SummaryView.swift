@@ -7,12 +7,14 @@ struct SummaryView: View {
     var body: some View {
         let agg = model.agg
         let rows = model.visibleEmployees().map { ($0, agg[$0.id] ?? Agg()) }
-        let tPay = rows.reduce(0) { $0 + $1.1.pay }, tPaid = rows.reduce(0) { $0 + $1.1.paidPay }
+        // Whole agorot: totals are exactly the sum of the rows.
+        let tPayA = rows.reduce(0) { $0 + $1.1.payAgorot }, tPaidA = rows.reduce(0) { $0 + $1.1.paidAgorot }
+        let tPay = Double(tPayA) / 100, tPaid = Double(tPaidA) / 100
         let tMin = rows.reduce(0) { $0 + $1.1.minutes }
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
-                    kpi("נותר לתשלום", fmtMoney(tPay - tPaid))
+                    kpi("נותר לתשלום", fmtMoney(Double(tPayA - tPaidA) / 100))
                     kpi("שולם", fmtMoney(tPaid))
                     kpi("שעות", fmtHM(tMin))
                 }
@@ -31,8 +33,8 @@ struct SummaryView: View {
                                     Spacer()
                                     VStack(alignment: .trailing) {
                                         Text(fmtMoney(a.pay)).fontWeight(.semibold).monospacedDigit()
-                                        Text(a.shifts.isEmpty ? "" : a.unpaid <= 0 ? "שולם ✓" : a.paidPay > 0 ? "נותר \(fmtMoney(a.unpaid))" : "לא שולם")
-                                            .font(.caption).foregroundStyle(a.unpaid <= 0 && !a.shifts.isEmpty ? .green : .secondary)
+                                        Text(a.shifts.isEmpty ? "" : a.allPaid ? "שולם ✓" : a.unpaidShifts.isEmpty ? "במשמרת עכשיו" : a.paidAgorot > 0 ? "נותר \(fmtMoney(a.unpaid))" : "לא שולם")
+                                            .font(.caption).foregroundStyle(a.allPaid ? .green : .secondary)
                                     }
                                 }.padding(.vertical, 8).padding(.horizontal, 12).contentShape(Rectangle())
                             }.buttonStyle(.plain)

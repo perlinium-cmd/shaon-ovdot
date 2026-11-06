@@ -79,9 +79,30 @@ object Notifier {
         if (!can(ctx)) return
         val n = NotificationCompat.Builder(ctx, CH_ALERTS).setSmallIcon(R.drawable.ic_stat_clock)
             .setContentTitle("נרשמה יציאה ב-$out")
-            .setContentText("${s.`in`}–$out · ${fmtHM(shiftMinutes(s.`in`, out))} שעות. טעות? אפשר לבקש תיקון באפליקציה.")
+            .setContentText("${s.`in`}–$out · ${fmtHM(shiftMinutes(s.date, s.`in`, out))} שעות. טעות? אפשר לבקש תיקון באפליקציה.")
             .setContentIntent(openApp(ctx)).setAutoCancel(true).setTimeoutAfter(10 * 60_000).build()
         runCatching { NotificationManagerCompat.from(ctx).notify(ID_DONE, n) }
+    }
+
+    /** A shift running for a day or more can't be clocked out with "now": she has to enter when she left. */
+    fun needsExitTime(ctx: Context, s: Shift) {
+        if (!can(ctx)) return
+        val n = NotificationCompat.Builder(ctx, CH_ALERTS).setSmallIcon(R.drawable.ic_stat_clock)
+            .setContentTitle("צריך לרשום שעת יציאה")
+            .setContentText("את במשמרת מאז ${s.`in`} (${s.date.substring(8)}/${s.date.substring(5, 7)}). פתחי את האפליקציה ורשמי באיזו שעה יצאת.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("את במשמרת מאז ${s.`in`} (${s.date.substring(8)}/${s.date.substring(5, 7)}), יותר מיממה, אז אי אפשר לרשום יציאה עכשיו. פתחי את האפליקציה ורשמי באיזו שעה יצאת באמת."))
+            .setContentIntent(openApp(ctx)).setAutoCancel(true).build()
+        runCatching { NotificationManagerCompat.from(ctx).notify(ID_REMIND, n) }
+    }
+
+    /** What a clock-out from outside the app did: show it. */
+    fun after(ctx: Context, s: Shift, r: Repo.ClockOut) {
+        when (r) {
+            is Repo.ClockOut.Done -> { clearShift(ctx); done(ctx, s, r.out) }
+            Repo.ClockOut.Undone -> clearShift(ctx)
+            Repo.ClockOut.NeedsExitTime -> needsExitTime(ctx, s)
+            Repo.ClockOut.Failed -> {}
+        }
     }
 
     fun remind(ctx: Context, s: Shift, mins: Long) {
@@ -112,7 +133,7 @@ class ClockReceiver : BroadcastReceiver() {
             try {
                 Repo.init(ctx); Repo.ensureStarted()
                 if (Repo.phase.value == Phase.Ready) {
-                    if (Repo.awaitOpenLoaded(5000)) Repo.openShift.value?.let { s -> Repo.clockOut(s)?.let { out -> Notifier.clearShift(ctx); Notifier.done(ctx, s, out) } }
+                    if (Repo.awaitOpenLoaded(5000)) Repo.openShift.value?.let { s -> Notifier.after(ctx, s, Repo.clockOutOrAsk(s)) }
                 }
             } finally { pending.finish() }
         }

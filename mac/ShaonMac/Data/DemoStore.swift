@@ -4,9 +4,13 @@ import Foundation
 @MainActor
 final class DemoStore: DataStore {
     let isDemo = true
+    var onProblem: ((String) -> Void)?
+    /// Tests: makes shiftsWithoutRate fail like the real store does without internet.
+    var offline = false
     private var settings = AppSettings(defaultRate: 40, timeFormat: "24")
     private var employees: [String: Employee] = [:]
     private var shifts: [String: Shift] = [:]
+    private(set) var payments: [String: Payment] = [:]
     private var devices: [String: Device] = [:]
     private var requests: [String: ShiftRequest] = [:]
     private var notices: [String: Notice] = [:]
@@ -56,23 +60,59 @@ final class DemoStore: DataStore {
     func addEmployee(_ e: Employee) async throws -> String { let id = newId(); var e = e; e.id = id; employees[id] = e; notify(); return id }
     func updateEmployee(_ e: Employee) async throws { employees[e.id] = e; notify() }
     func deleteEmployee(_ id: String) async throws {
-        employees[id] = nil; shifts = shifts.filter { $0.value.empId != id }
+        employees[id] = nil; shifts = shifts.filter { $0.value.empId != id }; payments = payments.filter { $0.value.empId != id }
         devices = devices.filter { $0.value.empId != id }; requests = requests.filter { $0.value.empId != id }
         notices = notices.filter { $0.value.empId != id }; notify()
     }
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void {
         watch { [weak self] in if let s = self { cb(s.shifts.values.filter { $0.month == month }) } }
     }
-    func addShift(_ s: Shift) async throws -> String { let id = newId(); var s = s; s.id = id; shifts[id] = s; notify(); return id }
-    func updateShift(_ s: Shift) async throws { shifts[s.id] = s; notify() }
-    func restoreShifts(_ list: [Shift]) async throws { list.forEach { shifts[$0.id] = $0 }; notify() }
-    func deleteShifts(_ ids: [String]) async throws { ids.forEach { shifts[$0] = nil }; notify() }
-    func setPaid(_ ids: [String], paid: Bool) async throws {
-        for id in ids { shifts[id]?.paid = paid; shifts[id]?.paidAt = paid ? Date().timeIntervalSince1970 * 1000 : nil }
+    func addShift(_ s: Shift) async throws -> String { let id = s.id.isEmpty ? newId() : s.id; var s = s; s.id = id; shifts[id] = s; notify(); return id }
+
+    // MARK: batches + undo (documents as dictionaries, like Firestore)
+    private func dict<T: Encodable>(_ v: T) -> [String: Any] {
+        guard let json = try? JSONEncoder().encode(v), var d = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { return [:] }
+        d["id"] = nil
+        return d
+    }
+    private func raw(_ col: String, _ id: String) -> [String: Any]? {
+        switch col {
+        case "shifts": shifts[id].map(dict)
+        case "payments": payments[id].map(dict)
+        case "employees": employees[id].map(dict)
+        default: nil
+        }
+    }
+    private func put(_ col: String, _ id: String, _ data: [String: Any]?) {
+        switch col {
+        case "shifts": shifts[id] = data.flatMap { decodeDoc(Shift.self, id: id, $0) }
+        case "payments": payments[id] = data.flatMap { decodeDoc(Payment.self, id: id, $0) }
+        case "employees": employees[id] = data.flatMap { decodeDoc(Employee.self, id: id, $0) }
+        case "notices": if let d = data, d["seen"] as? Bool == true { notices[id]?.seen = true }
+        default: break
+        }
+    }
+    func newId(_ col: String) -> String { newId() }
+    func commit(_ writes: [DocWrite]) async throws {
+        // Like a Firestore batch: an update of a missing document fails all of it.
+        for w in writes { if case let .update(c, id, _) = w, c != "notices", raw(c, id) == nil { throw StoreError.missingShift } }
+        for w in writes {
+            switch w {
+            case let .set(c, id, data): put(c, id, data)
+            case let .update(c, id, data): put(c, id, (raw(c, id) ?? [:]).merging(data) { $1 })
+            case let .delete(c, id): put(c, id, nil)
+            }
+        }
         notify()
     }
+    func snapshot(_ refs: [(col: String, id: String)]) async throws -> [DocSnapshot] {
+        refs.map { DocSnapshot(col: $0.col, id: $0.id, data: raw($0.col, $0.id)) }
+    }
 
-    func shiftsWithoutRate(empId: String) async throws -> [Shift] { shifts.values.filter { $0.empId == empId && $0.rate == nil } }
+    func shiftsWithoutRate(empId: String) async throws -> [Shift] {
+        if offline { throw StoreError.offline }
+        return shifts.values.filter { $0.empId == empId && $0.rate == nil }
+    }
     func setRates(_ rates: [String: Double]) async throws { for (id, r) in rates { shifts[id]?.rate = r }; notify() }
 
     func watchOpenShifts(_ cb: @escaping ([Shift]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(s.shifts.values.filter(\.isOpen)) } } }
