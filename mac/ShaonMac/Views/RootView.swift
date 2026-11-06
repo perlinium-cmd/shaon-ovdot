@@ -43,8 +43,9 @@ struct RootView: View {
             let agg = model.agg
             List(selection: $route) {
                 Label("סיכום חודשי", systemImage: "chart.bar").tag(Route.summary)
-                Label("בקשות ועדכונים", systemImage: "tray").tag(Route.requests)
+                Label("בקשות ועדכונים", systemImage: "tray")
                     .badge(model.pendingRequests.count + model.unseenNotices.count)
+                    .tag(Route.requests)
                 Label("טלפונים מחוברים", systemImage: "iphone.gen3").tag(Route.phones)
                 Section("עובדות") {
                     ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)) }
