@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch, updateDoc, deleteDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { shiftPay } from '../public/pay.js';
 
 const OWNER = 'boss';
 const env = await initializeTestEnvironment({
@@ -17,12 +18,7 @@ const [cmd, arg] = process.argv.slice(2);
 const pad = (n) => String(n).padStart(2, '0');
 const today = (() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })();
 
-const pay = (s, rate) => {
-  if (!s.in || !s.out) return 0;
-  const m = (t) => { const [h, mm] = t.split(':').map(Number); return h * 60 + mm; };
-  let d = m(s.out) - m(s.in); if (d < 0) d += 1440;
-  return d / 60 * (s.rate ?? rate);
-};
+const pay = (s, rate) => shiftPay(s, null, rate);   // the same calculation as the apps
 
 if (cmd === 'seed') {
   await env.clearFirestore();

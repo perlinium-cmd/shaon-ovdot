@@ -13,8 +13,8 @@ android {
         applicationId = "com.perlinium.shaon.employee"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
         // ./gradlew assembleDebug -Pemulator=true  -> talks to the local Firebase emulators (tests), never to real data.
         buildConfigField("boolean", "USE_EMULATOR", (project.findProperty("emulator") == "true").toString())
     }

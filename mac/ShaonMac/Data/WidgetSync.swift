@@ -69,6 +69,6 @@ func makeWidgetSnapshot(month: String, settings: AppSettings, employees: [Employ
                          last: last.map { .init(date: $0.date, in: $0.in, out: $0.out) })
         }
     var days: [String: [String: Int]] = [:]
-    for s in recent { days[s.date, default: [:]][s.empId, default: 0] += shiftMinutes(s.in, s.out) }
+    for s in recent { days[s.date, default: [:]][s.empId, default: 0] += shiftMinutes(s.date, s.in, s.out) }
     return WidgetSnapshot(month: month, twelve: settings.is12, employees: emps, days: days, updatedAt: .now)
 }

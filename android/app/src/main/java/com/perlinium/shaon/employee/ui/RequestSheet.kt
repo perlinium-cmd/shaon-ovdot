@@ -115,7 +115,7 @@ fun RequestSheet(shift: Shift?, onClose: () -> Unit, onDone: (String, Boolean) -
             }
             if (tin.isNotEmpty() && tout.isNotEmpty() && tin != tout) {
                 Text(
-                    "${fmtHM(shiftMinutes(tin, tout))} שעות" + if (isOvernight(tin, tout)) " · משמרת לילה, היציאה למחרת" else "",
+                    "${fmtHM(shiftMinutes(date, tin, tout))} שעות" + if (isOvernight(tin, tout)) " · משמרת לילה, היציאה למחרת" else "",
                     style = MaterialTheme.typography.titleMedium.nums(), color = MaterialTheme.colorScheme.primary,
                 )
             }

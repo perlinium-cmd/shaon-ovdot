@@ -145,7 +145,7 @@ struct RequestsView: View {
                 }
                 GridRow {
                     Text("מבוקש").foregroundStyle(.secondary)
-                    Text(r.out.isEmpty ? "כניסה ב-\(model.fmt(r.in)) (המשמרת עדיין פעילה)" : "\(model.fmt(r.in)) – \(model.fmt(r.out)) · \(fmtHM(shiftMinutes(r.in, r.out))) שעות")
+                    Text(r.out.isEmpty ? "כניסה ב-\(model.fmt(r.in)) (המשמרת עדיין פעילה)" : "\(model.fmt(r.in)) – \(model.fmt(r.out)) · \(fmtHM(shiftMinutes(r.date, r.in, r.out))) שעות")
                         .monospacedDigit().fontWeight(.semibold)
                 }
                 if let n = r.note, !n.isEmpty {

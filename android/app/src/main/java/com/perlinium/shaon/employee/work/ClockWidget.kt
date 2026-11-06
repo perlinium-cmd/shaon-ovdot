@@ -82,7 +82,7 @@ class ToggleClock : ActionCallback {
         if (Repo.phase.value != Phase.Ready) return
         if (!Repo.awaitOpenLoaded(4000)) return   // unknown state: never guess between in and out
         val open = Repo.openShift.value
-        if (open != null) Repo.clockOut(open)?.let { out -> Notifier.clearShift(context); Notifier.done(context, open, out) }
+        if (open != null) Notifier.after(context, open, Repo.clockOutOrAsk(open))
         else Repo.clockIn()
         ClockWidget().update(context, glanceId)
     }

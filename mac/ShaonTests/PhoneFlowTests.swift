@@ -31,7 +31,7 @@ final class PhoneFlowTests: XCTestCase {
         let open = store.simulateClockIn(empId: empId, date: today, time: "08:00")
         let done = try! await store.addShift(Shift(empId: empId, date: today, month: String(today.prefix(7)), in: "06:00", out: "07:00", rate: 40))
         await settle()
-        await m.setPaid([open, done], paid: true)
+        await m.markPaid([open, done])
         await settle()
         XCTAssertEqual(m.shifts?.first { $0.id == done }?.isPaid, true)
         XCTAssertEqual(m.shifts?.first { $0.id == open }?.isPaid, false)
@@ -207,5 +207,146 @@ final class PhoneFlowTests: XCTestCase {
         let codes = (0..<500).map { _ in newPairingCode() }
         XCTAssertEqual(Set(codes).count, 500)
         for c in codes { XCTAssertTrue(c.range(of: "^[A-HJ-NP-Z2-9]{8}$", options: .regularExpression) != nil, c) }
+    }
+
+    // MARK: payments: the records always match the shifts
+
+    private func paidSetup() async throws -> (AppModel, DemoStore, String, [String]) {
+        let (m, store) = model()
+        let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 37.5))
+        let today = todayStr(), month = String(today.prefix(7))
+        var ids: [String] = []
+        for d in 1...3 {
+            ids.append(try await store.addShift(Shift(empId: empId, date: "\(month)-0\(d)", month: month, in: "08:07", out: "13:52", rate: 37.5)))
+        }
+        m.month = month
+        await settle()
+        return (m, store, empId, ids)
+    }
+
+    func testPaymentRecordIsTheExactSumAndUnpayKeepsItExact() async throws {
+        let (m, store, empId, ids) = try await paidSetup()
+        await m.markPaid(ids)
+        await settle()
+        XCTAssertEqual(store.payments.count, 1)
+        let p = try XCTUnwrap(store.payments.values.first)
+        XCTAssertEqual(p.empId, empId)
+        XCTAssertEqual(p.amount, 646.89)               // 3 × 215.63, to the agora
+        XCTAssertEqual(Set(p.shiftIds ?? []), Set(ids))
+        XCTAssertTrue(ids.allSatisfy { id in m.shifts?.first { $0.id == id }?.paymentId == p.id })
+        // Taking one shift out leaves exactly the other two.
+        await m.markUnpaid([ids[0]])
+        await settle()
+        let left = try XCTUnwrap(store.payments[p.id])
+        XCTAssertEqual(left.amount, 431.26)
+        XCTAssertEqual(Set(left.shiftIds ?? []), Set(ids[1...]))
+        XCTAssertNil(m.shifts?.first { $0.id == ids[0] }?.paymentId)
+        // The last ones out: the record goes away.
+        await m.markUnpaid(Array(ids[1...]))
+        await settle()
+        XCTAssertTrue(store.payments.isEmpty)
+        XCTAssertTrue(m.shifts!.allSatisfy { !$0.isPaid })
+    }
+
+    func testPayingTwiceNeverCreatesTwoPayments() async throws {
+        let (m, store, _, ids) = try await paidSetup()
+        // Two clicks at once: the second one starts while the first is still saving.
+        let first = Task { await m.markPaid(ids) }
+        let second = Task { await m.markPaid(ids) }
+        await first.value; await second.value
+        await m.markPaid(ids)   // already paid: nothing happens
+        await settle()
+        XCTAssertEqual(store.payments.count, 1)
+        XCTAssertEqual(store.payments.values.first?.amount, 646.89)
+    }
+
+    func testDeletingAPaidShiftTakesItOutOfItsPayment() async throws {
+        let (m, store, _, ids) = try await paidSetup()
+        await m.markPaid(ids)
+        await settle()
+        await m.deleteShifts([ids[2]])
+        await settle()
+        XCTAssertEqual(store.payments.values.first?.amount, 431.26)
+        XCTAssertEqual(Set(store.payments.values.first?.shiftIds ?? []), Set(ids[0...1]))
+        XCTAssertNil(m.shifts?.first { $0.id == ids[2] })
+    }
+
+    func testUndoPutsPaymentAndShiftsBackExactly() async throws {
+        let (m, store, _, ids) = try await paidSetup()
+        let undo = UndoManager(); undo.groupsByEvent = false
+        m.undoManager = undo
+        undo.beginUndoGrouping()
+        await m.markPaid(ids)
+        undo.endUndoGrouping()
+        await settle()
+        XCTAssertEqual(store.payments.count, 1)
+        XCTAssertTrue(undo.canUndo)
+        undo.undo()
+        // The redo that the undo registers afterwards needs the app's event loop (which opens undo groups by
+        // itself); this test has none, so stop there — what's checked is that the undo puts everything back.
+        m.undoManager = nil
+        for _ in 0..<50 where !store.payments.isEmpty { await Task.yield(); try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(store.payments.isEmpty, "undo removes the payment it created")
+        XCTAssertTrue(m.shifts!.allSatisfy { !$0.isPaid && $0.paymentId == nil })
+    }
+
+    func testPaidShiftHoursCannotChangeButOthersCan() async throws {
+        let (m, _, _, ids) = try await paidSetup()
+        await m.markPaid([ids[0]])
+        await settle()
+        var paid = try XCTUnwrap(m.shifts?.first { $0.id == ids[0] })
+        paid.out = "15:00"
+        let saved = await m.updateShift(paid)
+        await settle()
+        XCTAssertFalse(saved)
+        XCTAssertEqual(m.shifts?.first { $0.id == ids[0] }?.out, "13:52", "what was paid stays what it was")
+        var other = try XCTUnwrap(m.shifts?.first { $0.id == ids[1] })
+        other.out = "15:00"
+        let ok = await m.updateShift(other)
+        await settle()
+        XCTAssertTrue(ok)
+        let after = try XCTUnwrap(m.shifts?.first { $0.id == ids[1] })
+        XCTAssertEqual(after.out, "15:00")
+        XCTAssertEqual(after.rate, 37.5, "editing times never touches the rate")
+    }
+
+    func testEditingTimesDoesNotOverwriteAPaymentMadeMeanwhile() async throws {
+        let (m, store, _, ids) = try await paidSetup()
+        var stale = try XCTUnwrap(m.shifts?.first { $0.id == ids[1] })   // the form was opened…
+        await m.markPaid([ids[1]])                                       // …then it was paid (e.g. on the website)…
+        await settle()
+        stale.note = "x"                                                 // …and the form saved with unchanged times
+        let ok = await m.updateShift(stale)
+        await settle()
+        XCTAssertTrue(ok)
+        let s = try XCTUnwrap(m.shifts?.first { $0.id == ids[1] })
+        XCTAssertTrue(s.isPaid, "the payment made meanwhile is kept")
+        XCTAssertEqual(s.paymentId, store.payments.keys.first)
+    }
+
+    func testRateChangeWithoutInternetChangesNothing() async throws {
+        let (m, store) = model()
+        let empId = try await store.addEmployee(Employee(id: "", name: "נועה", rate: 40))
+        let today = todayStr()
+        let sid = store.simulateClockIn(empId: empId, date: today, time: "08:00")
+        store.simulateClockOut(sid, time: "12:00")
+        await settle()
+        store.offline = true
+        var e = m.emp(empId)!; e.rate = 50
+        let saved = await m.updateEmployee(e)
+        await settle()
+        XCTAssertFalse(saved)
+        XCTAssertEqual(m.emp(empId)?.rate, 40, "nothing changes when the old rate can't be locked onto every past shift")
+        XCTAssertEqual(m.pay(try XCTUnwrap(m.shifts?.first { $0.id == sid })), 160)
+        XCTAssertNotNil(m.toast)
+    }
+
+    func testAShiftWithAnOddFieldIsNeverDropped() {
+        let data: [String: Any] = ["empId": "e1", "date": "2026-11-05", "month": "2026-11", "in": "08:00", "out": "16:00",
+                                   "rate": "40", "paid": "yes", "special": ["rate": "x"], "edits": 1.5]
+        let s = decodeDoc(Shift.self, id: "x", data)
+        XCTAssertNotNil(s, "a shift with an odd field must still show (with that field as not set)")
+        XCTAssertNil(s?.rate)
+        XCTAssertEqual(shiftPay(s!, Employee(id: "e1", name: "a", rate: 45), defaultRate: 40), 360)
     }
 }

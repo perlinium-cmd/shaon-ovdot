@@ -10,6 +10,7 @@ struct ClockState: Codable, Equatable {
         var date: String   // YYYY-MM-DD of the start
         var `in`: String   // HH:MM
         var out: String
+        var minutes: Int? = nil   // real time between start and stop (a day or more can't be told from in/out alone)
     }
     var running: [String: Date] = [:]   // empId -> clock-in time
     var pending: [Pending] = []
@@ -31,27 +32,41 @@ enum QuickClock {
         try? data.write(to: url, options: .atomic)
     }
 
+    /// Read, change and write the file as one step. The widget and the app are separate processes: without
+    /// coordination one of them could write over a change the other just made (a clocked shift lost or saved twice).
+    private static func update<T>(_ change: (inout ClockState) -> T) -> T {
+        guard let url else { var s = ClockState(); return change(&s) }
+        var result: T?
+        var err: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &err) { u in
+            var s = (try? Data(contentsOf: u)).flatMap { try? JSONDecoder().decode(ClockState.self, from: $0) } ?? ClockState()
+            result = change(&s)
+            if let data = try? JSONEncoder().encode(s) { try? data.write(to: u, options: .atomic) }
+        }
+        if let result { return result }
+        var s = load(); let r = change(&s); save(s); return r   // coordination unavailable: best effort
+    }
+
     /// Clock in, or clock out and queue the finished shift. Returns the queued shift, if any.
     @discardableResult
     static func toggle(_ empId: String, now: Date = .now) -> ClockState.Pending? {
-        var s = load()
-        defer { save(s) }
-        guard let start = s.running.removeValue(forKey: empId) else {
-            s.running[empId] = now
-            return nil
+        update { s in
+            guard let start = s.running.removeValue(forKey: empId) else {
+                s.running[empId] = now
+                return nil
+            }
+            // An accidental double tap shouldn't create a zero-length shift.
+            guard now.timeIntervalSince(start) >= 60 else { return nil }
+            let p = ClockState.Pending(empId: empId, date: dateStr(start), in: hhmm(start), out: hhmm(now),
+                                       minutes: Int(now.timeIntervalSince(start) / 60))
+            s.pending.append(p)
+            return p
         }
-        // An accidental double tap shouldn't create a zero-length shift.
-        guard now.timeIntervalSince(start) >= 60 else { return nil }
-        let p = ClockState.Pending(empId: empId, date: dateStr(start), in: hhmm(start), out: hhmm(now))
-        s.pending.append(p)
-        return p
     }
 
     /// App side: drop a queued shift once it's safely saved.
     static func removePending(_ id: UUID) {
-        var s = load()
-        s.pending.removeAll { $0.id == id }
-        save(s)
+        update { s in s.pending.removeAll { $0.id == id } }
     }
 
     static func postChanged() {

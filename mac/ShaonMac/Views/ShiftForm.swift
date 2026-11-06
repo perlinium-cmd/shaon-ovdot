@@ -15,6 +15,7 @@ struct ShiftForm: View {
     @State private var spHours = ""
     @State private var error: String?
     @State private var loaded = false
+    @State private var saving = false   // one save at a time: a second click never adds the shift twice
 
     private var dateS: String { dateStr(date) }
     private var last: (String, String)? {
@@ -63,10 +64,14 @@ struct ShiftForm: View {
             }
             HStack {
                 if let d = draft {
-                    let min = shiftMinutes(d.in, d.out)
+                    let min = shiftMinutes(d.date, d.in, d.out), wall = wallMinutes(d.in, d.out)
                     VStack(alignment: .leading) {
                         Text("\(fmtHM(min)) שעות").font(.title3.weight(.semibold)).monospacedDigit()
                         if isOvernight(d.in, d.out) { Text("משמרת לילה – היציאה למחרת").font(.caption).foregroundStyle(.secondary) }
+                        if min != wall {
+                            Text("בלילה הזה השעון \(min < wall ? "קפץ קדימה (שעון קיץ)" : "חזר אחורה (שעון חורף)"), אז בפועל \(fmtHM(min)) שעות ולא \(fmtHM(wall))")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
                     }
                     Spacer()
                     Text(fmtMoney(shiftPay(d, emp, defaultRate: model.defaultRate))).font(.title2.weight(.bold)).foregroundStyle(.tint).monospacedDigit()
@@ -79,7 +84,7 @@ struct ShiftForm: View {
                 Spacer()
                 if shift != nil { Button("ביטול", role: .cancel, action: onDone) }
                 Button(shift == nil ? "שמירה" : "עדכון") { Task { await save() } }
-                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(saving)
             }
         }
         .formStyle(.grouped)
@@ -106,6 +111,8 @@ struct ShiftForm: View {
     }
 
     private func save() async {
+        guard !saving else { return }
+        saving = true; defer { saving = false }
         if tin.isEmpty { error = "צריך להזין שעת כניסה"; return }
         if tout.isEmpty { error = "צריך להזין שעת יציאה"; return }
         if tin == tout { error = "שעת היציאה זהה לשעת הכניסה"; return }
@@ -122,13 +129,17 @@ struct ShiftForm: View {
             special = Special(rate: r, hours: h)
         }
         if var s = shift {
+            if s.isPaid && (s.date != dateS || s.in != tin || s.out != tout || !sameSpecial(s.special, special)) {
+                error = "המשמרת כבר סומנה כשולמה, ולכן אי אפשר לשנות בה שעות, תאריך או תעריף. קודם מבטלים את הסימון \"שולם\" בטבלה, ואז מעדכנים."
+                return
+            }
             s.date = dateS; s.month = String(dateS.prefix(7)); s.in = tin; s.out = tout; s.special = special
             if s.isOpen { s.open = false }   // the manager closed a running phone shift
-            await model.updateShift(s)
-            onDone()
+            if await model.updateShift(s) { onDone() }
         } else {
-            await model.addShift(Shift(empId: emp.id, date: dateS, month: String(dateS.prefix(7)), in: tin, out: tout,
-                                       rate: model.rate(for: emp), special: special, paid: false))
+            let saved = await model.addShift(Shift(empId: emp.id, date: dateS, month: String(dateS.prefix(7)), in: tin, out: tout,
+                                                   rate: model.rate(for: emp), special: special, paid: false))
+            guard saved else { return }   // keep what was typed, so nothing is lost
             if String(dateS.prefix(7)) != model.month { model.month = String(dateS.prefix(7)) }
             tin = ""; tout = ""; specialOn = false; spRate = ""; spHours = ""
         }

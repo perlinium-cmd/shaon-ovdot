@@ -100,8 +100,8 @@ struct RootView: View {
                 Circle().fill(.green).frame(width: 8, height: 8).help("בעבודה עכשיו")
             }
             Spacer()
-            if let a, !a.shifts.isEmpty, a.unpaid > 0 { Text(fmtMoney(a.unpaid)).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
-            else if let a, !a.shifts.isEmpty { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+            if let a, !a.unpaidShifts.isEmpty { Text(fmtMoney(a.unpaid)).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
+            else if let a, a.allPaid { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
         }
     }
 }

@@ -86,6 +86,7 @@ import com.perlinium.shaon.employee.logic.fmtMonth
 import com.perlinium.shaon.employee.logic.greeting
 import com.perlinium.shaon.employee.logic.hm
 import com.perlinium.shaon.employee.logic.nowLocal
+import com.perlinium.shaon.employee.logic.plainClockOutOk
 import com.perlinium.shaon.employee.logic.shiftMinutes
 import com.perlinium.shaon.employee.logic.shiftPay
 import com.perlinium.shaon.employee.logic.totals
@@ -145,16 +146,18 @@ fun ClockScreen(
             val s = open
             if (working && s != null) Working(s, now, rate, settings.defaultRate, emp) {
                 tap {
-                    // Out less than a minute after in = a mistaken tap: cancel instead of saving an empty shift.
-                    if (System.currentTimeMillis() - (s.inAt ?: 0L) < 60_000) {
-                        Repo.undoClockIn(s.id); finished = null
-                        onUndo("המשמרת בוטלה (פחות מדקה)") {}
-                        return@tap
+                    when (val r = Repo.clockOutOrAsk(s)) {
+                        // Out less than a minute after in = a mistaken tap: cancelled instead of saving an empty shift.
+                        Repo.ClockOut.Undone -> { finished = null; onUndo("המשמרת בוטלה (פחות מדקה)") {} }
+                        // A day or more: "now" can't be the exit time, so she says when she really left.
+                        Repo.ClockOut.NeedsExitTime -> onRequest(s)
+                        is Repo.ClockOut.Done -> {
+                            val done = s.copy(out = r.out, open = false)
+                            finished = Finished(shiftMinutes(s.date, s.`in`, r.out), shiftPay(done, emp, settings.defaultRate), s.`in`, r.out)
+                            onUndo("נרשמה יציאה ב-${r.out}") { Repo.undoClockOut(s); finished = null }
+                        }
+                        Repo.ClockOut.Failed -> {}
                     }
-                    val out = Repo.clockOut(s) ?: return@tap
-                    val done = s.copy(out = out, open = false)
-                    finished = Finished(shiftMinutes(s.`in`, out), shiftPay(done, emp, settings.defaultRate), s.`in`, out)
-                    onUndo("נרשמה יציאה ב-$out") { Repo.undoClockOut(s); finished = null }
                 }
             } else Idle(enabled = loaded || session != null, last = recent.firstOrNull { !it.open && it.out.isNotEmpty() }) {
                 tap {
@@ -212,7 +215,8 @@ private fun Working(s: Shift, now: Long, rate: Double, defaultRate: Double?, emp
             fmtHMS(secs), style = MaterialTheme.typography.displayLarge,
             modifier = Modifier.semantics { contentDescription = "במשמרת ${secs / 3600} שעות ו-${(secs % 3600) / 60} דקות" },
         )
-        Text("נכנסת ב-${s.`in`}${if (rate > 0 && soFar >= 1) " · עד עכשיו ≈ ${fmtMoney(soFar)}" else ""}",
+        // After a day or more the times can't tell the hours (see plainClockOutOk), so no estimate then.
+        Text("נכנסת ב-${s.`in`}${if (rate > 0 && soFar >= 1 && plainClockOutOk(s, now)) " · עד עכשיו ≈ ${fmtMoney(soFar)}" else ""}",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(18.dp))
         BigButton(start = false, enabled = true, onClick = onClockOut)

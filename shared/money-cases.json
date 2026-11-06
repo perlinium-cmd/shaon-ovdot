@@ -1,0 +1,27 @@
+{
+  "about": "Shared rounding and parsing cases for the web app (public/pay.js), the Mac app (Pay.swift, TimeParse.swift) and the Android app (Pay.kt). toAgorot: shekels -> whole agorot, half up (half away from zero below 0), reading the number's shortest decimal form. parseAmount: typed text -> amount with at most 2 decimals; null = empty, \"invalid\" = rejected. parseHM: \"HH:MM\" -> minutes since midnight, null = not a valid time.",
+  "toAgorot": [
+    [0, 0], [1, 100], [40, 4000], [42.35, 4235], [37.5, 3750], [0.01, 1],
+    [1.005, 101], [2.675, 268], [1.045, 105], [8.615, 862], [10.235, 1024], [10.025, 1003],
+    [0.005, 1], [0.0049, 0], [0.004999, 0], [123.456, 12346], [123.454, 12345],
+    [1e-7, 0], [99999.995, 10000000], [1234567.891, 123456789], [0.30000000000000004, 30],
+    [-1.005, -101], [-0.004, 0], [-42.35, -4235]
+  ],
+  "parseAmount": [
+    ["40", 40], ["42.5", 42.5], ["42,50", 42.5], [" 40 ", 40], ["40.", 40], [".5", 0.5], ["0", 0],
+    ["42.555", 42.56], ["42.554", 42.55], ["0.005", 0.01], ["0.004", 0], ["100000", 100000],
+    ["", null], ["   ", null],
+    ["abc", "invalid"], ["1e3", "invalid"], ["0x10", "invalid"], ["-5", "invalid"], ["4 0", "invalid"],
+    ["100000.01", "invalid"], ["1.2.3", "invalid"], [".", "invalid"], ["40₪", "invalid"], ["٤٠", "invalid"], ["Infinity", "invalid"]
+  ],
+  "parseHM": [
+    ["08:00", 480], ["8:00", 480], ["00:00", 0], ["23:59", 1439], ["12:30", 750],
+    ["24:00", null], ["08:60", null], ["0800", null], ["", null], ["08:00:00", null], [" 08:00", null], ["08:00 ", null],
+    ["-1:00", null], ["8:5", null], ["123:00", null], ["ab:cd", null]
+  ],
+  "parseTyped": [
+    ["830", null, "08:30"], ["0830", null, "08:30"], ["8:30", null, "08:30"], ["2359", null, "23:59"], ["8", null, "08:00"],
+    ["", null, ""], ["2460", null, null], ["25", null, null], ["830", "PM", "20:30"], ["12", "AM", "00:00"],
+    ["12", "PM", "12:00"], ["13", "AM", "13:00"], ["0", "PM", "00:00"], ["1234567", null, "12:34"]
+  ]
+}

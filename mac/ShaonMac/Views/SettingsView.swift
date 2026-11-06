@@ -45,6 +45,6 @@ struct SettingsView: View {
     private func saveRate() {
         guard let r = parseRate(rate), !r.isNaN else { error = "צריך להזין תעריף תקין"; return }
         error = nil
-        Task { await model.saveSettings { $0.defaultRate = r }; model.say("התעריף נשמר") }
+        Task { if await model.saveSettings({ $0.defaultRate = r }) { model.say("התעריף נשמר") } }
     }
 }

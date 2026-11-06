@@ -21,13 +21,14 @@ fun nowLocal(ms: Long = System.currentTimeMillis()) = Instant.ofEpochMilli(ms).a
 fun fmtHM(min: Int): String = "${min / 60}:${"%02d".format(min % 60)}"
 fun fmtHMS(totalSec: Long): String { val s = maxOf(0, totalSec); return "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) }
 
+/** 1234.5 -> "1,234.50 ₪", 40 -> "40 ₪". Formats the exact whole agorot, never a float. */
 fun fmtMoney(n: Double): String {
-    val v = round2(n)
+    val a = toAgorot(n) ?: 0L
     val f = NumberFormat.getNumberInstance(HE).apply {
-        minimumFractionDigits = if (v == Math.rint(v)) 0 else 2
+        minimumFractionDigits = if (a % 100 == 0L) 0 else 2
         maximumFractionDigits = 2
     }
-    return "${f.format(v)} ₪"
+    return "${f.format(java.math.BigDecimal.valueOf(a, 2))} ₪"
 }
 
 fun parseDate(s: String): LocalDate = runCatching { LocalDate.parse(s) }.getOrDefault(LocalDate.now())

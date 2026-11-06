@@ -145,3 +145,49 @@ struct AppSettings: Codable, Equatable {
     var timeFormat: String?   // "24" | "12"
     var is12: Bool { timeFormat == "12" }
 }
+
+// MARK: lenient decoding
+// A field with an unexpected type (e.g. a rate saved as text) reads as "not set" instead of failing the whole
+// document — otherwise that shift would silently vanish from the Mac's lists and totals while the website shows it.
+
+private extension KeyedDecodingContainer {
+    func opt<T: Decodable>(_ type: T.Type, _ key: Key) -> T? { (try? decodeIfPresent(type, forKey: key)) ?? nil }
+    func str(_ key: Key) -> String { opt(String.self, key) ?? "" }
+}
+
+extension Special {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(rate: c.opt(Double.self, .rate), hours: c.opt(Double.self, .hours))
+    }
+}
+
+extension Employee {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: c.str(.id), name: c.str(.name), rate: c.opt(Double.self, .rate), active: c.opt(Bool.self, .active),
+                  createdAt: c.opt(Double.self, .createdAt))
+    }
+}
+
+extension Shift {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: c.str(.id), empId: c.str(.empId), date: c.str(.date), month: c.str(.month), in: c.str(.in), out: c.str(.out),
+                  rate: c.opt(Double.self, .rate), special: c.opt(Special.self, .special), paid: c.opt(Bool.self, .paid),
+                  paidAt: c.opt(Double.self, .paidAt), paymentId: c.opt(String.self, .paymentId), createdAt: c.opt(Double.self, .createdAt),
+                  note: c.opt(String.self, .note), source: c.opt(String.self, .source), open: c.opt(Bool.self, .open),
+                  inAt: c.opt(Double.self, .inAt), outAt: c.opt(Double.self, .outAt), syncedAt: c.opt(Double.self, .syncedAt),
+                  outSyncedAt: c.opt(Double.self, .outSyncedAt), deviceId: c.opt(String.self, .deviceId), fixedBy: c.opt(String.self, .fixedBy),
+                  requestId: c.opt(String.self, .requestId), manual: c.opt(Bool.self, .manual), edited: c.opt(Bool.self, .edited),
+                  edits: c.opt(Int.self, .edits))
+    }
+}
+
+extension Payment {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: c.str(.id), empId: c.str(.empId), date: c.str(.date), amount: c.opt(Double.self, .amount) ?? 0,
+                  method: c.str(.method), shiftIds: c.opt([String].self, .shiftIds), createdAt: c.opt(Double.self, .createdAt))
+    }
+}

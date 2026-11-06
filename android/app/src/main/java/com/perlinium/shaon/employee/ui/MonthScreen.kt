@@ -121,7 +121,7 @@ fun MonthScreen(onShift: (Shift) -> Unit) {
 @Composable
 private fun ShiftRow(s: Shift, pay: Double, onClick: () -> Unit) {
     val d = parseDate(s.date)
-    val mins = shiftMinutes(s.`in`, s.out)
+    val mins = shiftMinutes(s.date, s.`in`, s.out)
     val desc = buildString {
         append("${fmtWeekday(s.date)} ${fmtDayMonth(s.date)}, ")
         if (s.open) append("נכנסת ב-${s.`in`}, עדיין במשמרת") else append("${s.`in`} עד ${s.out}, ${fmtHM(mins)} שעות, ${fmtMoney(pay)}, ${if (s.paid) "שולם" else "ממתין לתשלום"}")
