@@ -202,7 +202,9 @@ struct PhonesView: View {
                 Text("כל עובדת מחברת את הטלפון שלה פעם אחת. אחרי זה הוא נשאר מחובר תמיד, גם אחרי התקנה מחדש. ניתוק כאן חוסם אותו מיד.")
                     .foregroundStyle(.secondary)
             }
-            ForEach((model.employees ?? []).filter(\.isActive)) { e in
+            // Archived employees too, while a phone is still connected: it can still clock in, so it must be visible
+            // here to be disconnected.
+            ForEach((model.employees ?? []).filter { $0.isActive || !model.devices(of: $0.id).isEmpty }) { e in
                 Section {
                     let ds = model.devices(of: e.id)
                     if ds.isEmpty {
@@ -223,8 +225,9 @@ struct PhonesView: View {
                     HStack {
                         Avatar(name: e.name, size: 22)
                         Text(e.name).font(.headline)
+                        if !e.isActive { Text("בארכיון").font(.caption).foregroundStyle(.secondary) }
                         Spacer()
-                        Button { pairingFor = e } label: { Label("חיבור טלפון", systemImage: "qrcode") }
+                        if e.isActive { Button { pairingFor = e } label: { Label("חיבור טלפון", systemImage: "qrcode") } }
                     }
                 }
             }

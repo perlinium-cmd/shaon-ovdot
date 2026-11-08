@@ -25,6 +25,17 @@ final class PayTests: XCTestCase {
         XCTAssertEqual(shiftPay(over, nil, defaultRate: 0), 120, accuracy: 0.001)
     }
 
+    func testRateFieldText() {
+        XCTAssertEqual(fmtNum(45), "45")
+        XCTAssertEqual(fmtNum(100), "100")
+        XCTAssertEqual(fmtNum(0), "0")
+        XCTAssertEqual(fmtNum(45.5), "45.5")
+        XCTAssertEqual(fmtNum(45.25), "45.25")
+        XCTAssertEqual(fmtNum(32.3), "32.3")
+        // What the field shows reads back as exactly the same rate (no agora lost or added).
+        for r in [0, 1, 29.99, 32.3, 40, 45.5, 45.25, 99_999.99] { XCTAssertEqual(parseRate(fmtNum(r)), r) }
+    }
+
     func testRateFallback() {
         let s = shift("08:00", "09:00", rate: nil)
         XCTAssertEqual(shiftPay(s, Employee(id: "e", name: "a", rate: 50), defaultRate: 40), 50)

@@ -142,44 +142,61 @@ struct EmployeeEditor: View {
     @State private var rate = ""
     @State private var error: String?
     @State private var askDelete = false
+    @State private var saving = false   // a second click while saving must not add her twice
 
     var body: some View {
         Form {
             Text(emp == nil ? "עובדת חדשה" : "עריכת פרטים").font(.title3.weight(.semibold))
-            TextField("שם", text: $name)
-            TextField("תעריף שעתי אישי (לא חובה)", text: $rate, prompt: Text("\(model.defaultRate ?? 0)"))
+            TextField("שם", text: $name).onChange(of: name) { error = nil }
+            TextField("תעריף שעתי אישי (לא חובה)", text: $rate, prompt: Text(fmtNum(model.defaultRate ?? 0))).onChange(of: rate) { error = nil }
             Text("השאר ריק כדי להשתמש בתעריף הכללי (\(fmtMoney(model.defaultRate ?? 0)) לשעה).").font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
                 if let emp {
-                    Button(emp.isActive ? "העברה לארכיון" : "החזרה לרשימה") {
-                        var e = emp; e.active = !emp.isActive
-                        Task { await model.updateEmployee(e); dismiss() }
-                    }
+                    Button(emp.isActive ? "העברה לארכיון" : "החזרה לרשימה") { Task { await setActive(emp, !emp.isActive) } }
                     Button("מחיקה לצמיתות", role: .destructive) { askDelete = true }
                 }
                 Spacer()
                 Button("ביטול", role: .cancel) { dismiss() }
                 Button(emp == nil ? "הוספה" : "שמירה") { Task { await save() } }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
             }
+            .disabled(saving)
         }
         .formStyle(.grouped).frame(width: 440).padding()
-        .onAppear { name = emp?.name ?? ""; rate = emp?.rate.map { String($0) } ?? "" }
-        .confirmationDialog("למחוק את \(emp?.name ?? "")?", isPresented: $askDelete) {
-            Button("מחיקה לצמיתות", role: .destructive) { if let emp { Task { await model.deleteEmployee(emp); dismiss() } } }
-        } message: { Text("כל המשמרות שלה יימחקו. אפשר במקום זה להעביר לארכיון.") }
+        .onAppear { name = emp?.name ?? ""; rate = emp?.rate.map(fmtNum) ?? "" }
+        .confirmationDialog("למחוק את \(emp?.name ?? "") לצמיתות?", isPresented: $askDelete) {
+            Button("מחיקה לצמיתות", role: .destructive) {
+                guard let emp else { return }
+                saving = true
+                Task { if await model.deleteEmployee(emp) { dismiss() }; saving = false }
+            }
+        } message: { Text("כל המשמרות שלה (בכל החודשים), היסטוריית התשלומים והטלפון המחובר יימחקו, ואי אפשר לבטל את זה. כדי רק להסתיר אותה ולשמור את ההיסטוריה, בחר \"העברה לארכיון\".") }
+    }
+
+    private func setActive(_ emp: Employee, _ active: Bool) async {
+        guard !saving else { return }
+        saving = true; defer { saving = false }
+        var e = emp; e.active = active
+        guard await model.updateEmployee(e) else { return }   // not saved: the message says why
+        model.say(active ? "\(emp.name) הוחזרה לרשימה" : "\(emp.name) הועברה לארכיון")
+        dismiss()
     }
 
     private func save() async {
+        guard !saving else { return }
         let n = name.trimmingCharacters(in: .whitespaces)
         let r = parseRate(rate)
         if n.isEmpty { error = "צריך להזין שם"; return }
         if let r, r.isNaN { error = "תעריף לא תקין"; return }
+        saving = true; defer { saving = false }
         if var emp {
             emp.name = n; emp.rate = r
             // Not saved (e.g. a rate change without internet): keep the form open, the message says why.
             guard await model.updateEmployee(emp) else { return }
-        } else { _ = await model.addEmployee(name: n, rate: r) }
+            model.say("הפרטים נשמרו")
+        } else {
+            guard await model.addEmployee(name: n, rate: r) != nil else { return }
+        }
         dismiss()
     }
 }
