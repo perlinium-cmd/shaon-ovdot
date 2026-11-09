@@ -187,7 +187,7 @@ button { cursor: pointer; }
 /* ---------- Bottom nav (mobile) ---------- */
 .bottomnav {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -773,3 +773,69 @@ main {
 .paid-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 .offline-banner { background: var(--surface-2); color: var(--text); }
+
+/* ---------- Employee phones: badge, "at work now", requests, connected phones ---------- */
+.avatar.sm { width: 28px; height: 28px; font-size: 13px; }
+.avatar.emoji.sm { font-size: 17px; }
+.nav-badge {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; line-height: 1;
+}
+.tabs .nav-badge { margin-inline-start: 2px; }
+.nav-ic { position: relative; display: inline-flex; }
+.bottomnav .nav-badge { position: absolute; top: -6px; inset-inline-end: -12px; min-width: 18px; height: 18px; font-size: 11px; padding: 0 5px; }
+
+.live { max-width: 1040px; margin: 0 auto; padding: 12px 16px 0; display: grid; gap: 6px; text-align: start; }
+.live-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, #16A34A 11%, var(--surface)); border: 1px solid color-mix(in srgb, #16A34A 25%, transparent);
+}
+.live-row:hover { border-color: #16A34A; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: #16A34A; flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, #16A34A 25%, transparent); }
+.live-label { font-weight: 600; color: #15803D; font-size: 14px; }
+.live-warn { display: inline-flex; align-items: center; gap: 4px; color: var(--warn-text); font-size: 14px; }
+.live-warn .ic { width: 16px; height: 16px; }
+.live-time { font-size: 18px; }
+.live-row .spacer, .phone-list .spacer, .decided-list .spacer { flex: 1; }
+@media (prefers-color-scheme: dark) { .live-label { color: #4ADE80; } }
+
+.requests { display: grid; gap: 12px; max-width: 760px; text-align: start; }
+.req-h { font-size: 17px; margin-top: 12px; }
+.req-h:first-child { margin-top: 0; }
+.req-sub { font-size: 14px; margin-top: -6px; }
+.req-empty { padding: 28px 20px; }
+.req-card { padding: 16px; display: grid; gap: 12px; }
+.req-head { display: flex; align-items: center; gap: 10px; }
+.req-head h3 { font-size: 17px; }
+.req-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; }
+.req-grid dt { color: var(--muted); }
+.req-grid dd { margin: 0; }
+.req-asked { font-weight: 600; }
+.req-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.notice-list, .decided-list { list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px; }
+.notice-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: start;
+  background: none; border: 0; padding: 8px 10px; border-radius: var(--radius-sm);
+}
+.notice-row:hover { background: var(--surface-2); }
+.notice-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.notice-row.is-new { background: var(--primary-soft); }
+.notice-row.is-new .dot { background: var(--primary); }
+.notice-row.is-new .t { font-weight: 600; }
+.notice-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.notice-text .muted { font-size: 14px; }
+.notice-row .when { font-size: 12px; white-space: nowrap; }
+.decided-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px; }
+.req-status { font-size: 14px; }
+.req-status.ok { color: var(--success); }
+.req-status.no { color: var(--danger); }
+.req-status.muted { color: var(--muted); font-weight: 500; }
+
+.phone-groups { display: grid; gap: 12px; }
+.phone-group { display: grid; gap: 6px; }
+.phone-group-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.phone-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.phone-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-inline-start: 36px; }
+.phone-list .ic { color: var(--primary); }
+.phone-none { font-size: 14px; padding-inline-start: 36px; }

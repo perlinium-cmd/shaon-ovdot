@@ -3,6 +3,9 @@ import {
   round2, toAgorot, shiftMinutes, wallMinutes, isOvernight, specialMinutes, shiftPayAgorot, aggregate, emptyAgg, unpaidOf,
   effRate as rateOf, shiftRate as rateOfShift, parseAmount, parseTyped,
 } from './pay.js';
+import {
+  pendingRequests, decidedRequests, unseenNotices, sortNotices, describeNotice, runningMinutes, RequestError,
+} from './phone.js';
 
 /* =========================================================
    Helpers
@@ -214,6 +217,11 @@ const state = {
   employees: null, // null until loaded
   shifts: null, // shifts of state.month; null until loaded
   month: sessionStorage.getItem('month') || currentMonth(),
+  // From the employees' phones (null until loaded)
+  openShifts: null, // shifts running right now, any month
+  devices: null, // connected phones
+  requests: null, // requests to fix or add a shift
+  notices: null, // changes saved on the phone without approval, newest first
 };
 let unsubs = [];
 let unsubShifts = null;
@@ -1602,6 +1610,7 @@ const SettingsView = {
             <button type="button" role="radio" data-sound="off" aria-checked="${!soundOn()}">כבוי</button>
           </div>
         </section>
+        <section class="card" id="phones"></section>
         <section class="card" id="archived"></section>
         <section class="card">
           <h2>חשבון</h2>
@@ -1666,6 +1675,7 @@ const SettingsView = {
       if (b.dataset.sound === 'on') { unlockAudio(); gearClick(); } // short preview
     }));
     this.renderArchived();
+    this.renderPhones();
   },
   update() {
     if (!this.built) { if (isLoaded()) this.build(); return; }
@@ -1679,6 +1689,50 @@ const SettingsView = {
       this.syncApply?.();
     }
     this.renderArchived();
+    this.renderPhones();
+  },
+  /** Connected phones per employee (as on the Mac), with disconnect. Pairing a new phone is done on the Mac. */
+  renderPhones() {
+    const box = $('#phones');
+    if (!box) return;
+    const devs = state.devices;
+    const groups = [];
+    if (devs) {
+      const ofEmp = (id) => devs.filter((d) => d.empId === id).sort((a, b) => (a.pairedAt || 0) - (b.pairedAt || 0));
+      // Active employees, plus archived ones that still have a phone (so it can be disconnected).
+      state.employees.filter((e) => e.active !== false || ofEmp(e.id).length).sort(byName)
+        .forEach((e) => groups.push({ emp: e, list: ofEmp(e.id) }));
+      // A phone of an employee that no longer exists: still shown, so it can be disconnected.
+      const orphans = devs.filter((d) => !empById(d.empId));
+      if (orphans.length) groups.push({ emp: { name: 'עובדת שנמחקה' }, list: orphans });
+    }
+    box.innerHTML = `<h2>טלפונים מחוברים</h2>
+      <p class="muted" style="font-size:14px">כל עובדת מחברת את הטלפון שלה פעם אחת. אחרי זה הוא נשאר מחובר תמיד, גם אחרי התקנה מחדש. ניתוק כאן חוסם אותו מיד.</p>
+      ${!devs ? '<p class="muted">טוען…</p>' : `
+      <div class="phone-groups">${groups.map(({ emp, list }) => `
+        <div class="phone-group">
+          <div class="phone-group-head">${avatar(emp, 'sm')}<span class="name">${esc(emp.name)}</span>${emp.active === false ? '<span class="badge">בארכיון</span>' : ''}</div>
+          ${list.length ? `<ul class="phone-list">${list.map((d) => `
+            <li>${icon('phone')}<span class="phone-model">${esc(d.model || 'טלפון')}</span>
+              ${typeof d.pairedAt === 'number' ? `<span class="muted num">חובר ${fmtDayMonth(toDateStr(new Date(d.pairedAt)))}</span>` : ''}
+              <span class="spacer"></span>
+              <button class="btn btn-danger-ghost" type="button" data-disconnect="${esc(d.id)}">ניתוק</button></li>`).join('')}
+          </ul>` : '<p class="muted phone-none">אין טלפון מחובר</p>'}
+        </div>`).join('')}
+      </div>
+      <p class="muted" style="font-size:13px">חיבור טלפון חדש (קוד QR) נעשה מאפליקציית המק.</p>`}`;
+    box.querySelectorAll('[data-disconnect]').forEach((b) => b.addEventListener('click', async () => {
+      const d = (state.devices || []).find((x) => x.id === b.dataset.disconnect);
+      if (!d) return;
+      const name = empById(d.empId)?.name || '';
+      const ok = await confirmSheet({
+        title: `לנתק את הטלפון של ${name}?`,
+        text: 'הטלפון יפסיק מיד לראות ולרשום שעות. המשמרות שכבר נרשמו נשארות. אפשר לחבר אותו שוב בקוד חדש.',
+        okLabel: 'ניתוק',
+      });
+      if (!ok) return;
+      try { await state.store.disconnect(d); toast('הטלפון נותק'); } catch (e) { fail(e); }
+    }));
   },
   renderArchived() {
     const arch = state.employees.filter((e) => e.active === false).sort(byName);
@@ -1699,6 +1753,176 @@ const SettingsView = {
     }));
   },
 };
+
+/* ---------- Requests from the phones + changes saved on the phone (same as the Mac's RequestsView) ---------- */
+const empName = (id) => empById(id)?.name || 'עובדת';
+const dayLabel = (date) => `${fmtWeekday(date)} ${fmtDayMonth(date)}`;
+/** "14:05" for today, "5/11 14:05" otherwise. */
+const whenLabel = (ms) => {
+  const d = new Date(ms); const hm = fmtTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  return toDateStr(d) === todayStr() ? hm : `${fmtDayMonth(toDateStr(d))} ${hm}`;
+};
+/** The shift a request is about (from this month's list, or the running ones). */
+const shiftById = (id) => (id ? (state.shifts || []).find((x) => x.id === id) || (state.openShifts || []).find((x) => x.id === id) : null);
+
+const RequestsView = {
+  mount(el) { this.el = el; this.busy = null; this.newIds = new Set(); this.seenKey = ''; this.update(); },
+  unmount() { clearTimeout(this.seenTimer); this.seenKey = ''; },
+  update() {
+    const el = this.el;
+    if (!state.employees || !state.requests || !state.notices) { el.innerHTML = loadingHTML; return; }
+    const pending = pendingRequests(state.requests);
+    const decided = decidedRequests(state.requests);
+    const notices = state.notices.slice(0, 40);
+    el.innerHTML = `
+      <div class="page-head"><h1>בקשות ועדכונים</h1></div>
+      <div class="requests">
+        <h2 class="req-h">בקשות מהטלפון</h2>
+        ${pending.length ? pending.map((r) => this.card(r)).join('') : `
+          <div class="card empty req-empty">
+            <span class="brand-mark lg">${icon('check')}</span>
+            <h2>אין בקשות שמחכות לך</h2>
+            <p class="muted">כשעובדת תבקש לתקן שעה או להוסיף משמרת, הבקשה תופיע כאן.</p>
+          </div>`}
+        ${notices.length ? `
+          <h2 class="req-h">עדכונים מהטלפון</h2>
+          <p class="muted req-sub">שעות שהעובדות הזינו או שינו בעצמן באותו יום. הן נשמרו בלי אישור (עד שני שינויים בכל משמרת, מהשלישי צריך את האישור שלך). אם משהו לא נכון, אפשר לתקן בדף של העובדת.</p>
+          <ul class="card notice-list">${notices.map((n) => this.noticeRow(n)).join('')}</ul>` : ''}
+        ${decided.length ? `
+          <h2 class="req-h">בקשות שטופלו לאחרונה</h2>
+          <ul class="card decided-list">${decided.map((r) => this.decidedRow(r)).join('')}</ul>` : ''}
+      </div>`;
+    el.querySelectorAll('[data-decide]').forEach((b) => b.addEventListener('click', () => this.act(b.dataset.id, b.dataset.decide === 'approve')));
+    el.querySelectorAll('[data-notice]').forEach((b) => b.addEventListener('click', () => {
+      const n = state.notices.find((x) => x.id === b.dataset.notice);
+      if (!n) return;
+      setMonth(String(n.date).slice(0, 7));
+      location.hash = `#/e/${n.empId}`;
+    }));
+    this.markSeenSoon();
+  },
+  /** Looking at the page marks the updates as read (after a moment); they stay highlighted while it is open. */
+  markSeenSoon() {
+    const ids = unseenNotices(state.notices).map((n) => n.id);
+    const key = ids.join(',');
+    if (key === this.seenKey) return;
+    this.seenKey = key;
+    clearTimeout(this.seenTimer);
+    if (!ids.length) return;
+    ids.forEach((id) => this.newIds.add(id));
+    this.seenTimer = setTimeout(() => {
+      if (mounted.view !== RequestsView) { this.seenKey = ''; return; }
+      state.store.markNoticesSeen(ids).catch((e) => console.error(e));
+    }, 1500);
+  },
+  card(r) {
+    const name = empName(r.empId);
+    const old = r.type === 'fix' ? shiftById(r.shiftId) : null;
+    const paid = old?.paid === true;
+    const busy = this.busy != null;
+    const asked = r.out
+      ? `${rng(r.in, r.out)} · <span class="num">${fmtHM(shiftMinutes(r.date, r.in, r.out))}</span> שעות`
+      : `כניסה ב-<span class="num">${fmtTime(r.in)}</span> (המשמרת עדיין פעילה)`;
+    return `
+      <article class="card req-card">
+        <div class="req-head">${avatar(empById(r.empId) || { name })}
+          <div><h3>${esc(name)} ${r.type === 'add' ? 'מבקשת להוסיף משמרת' : 'מבקשת לתקן משמרת'}</h3>
+            <div class="muted">${esc(dayLabel(r.date))}</div></div></div>
+        <dl class="req-grid">
+          ${r.type === 'fix' ? `<dt>רשום עכשיו</dt><dd>${old
+            ? (old.open ? `<span class="num">${fmtTime(old.in)}</span> – עדיין במשמרת` : rng(old.in, old.out))
+            : '<span class="muted">לא בחודש המוצג</span>'}</dd>` : ''}
+          <dt>מבוקש</dt><dd class="req-asked">${asked}</dd>
+          ${r.note ? `<dt>הערה</dt><dd>${esc(r.note)}</dd>` : ''}
+        </dl>
+        ${paid ? `<div class="notice">${icon('alert')}<span>המשמרת הזו כבר סומנה כשולמה. כדי לאשר, בטל קודם את סימון התשלום.</span></div>` : ''}
+        <div class="req-actions">
+          <button class="btn btn-primary${this.busy === `${r.id}:approve` ? ' is-loading' : ''}" type="button" data-decide="approve" data-id="${esc(r.id)}" ${busy || paid ? 'disabled' : ''}>אישור</button>
+          <button class="btn btn-secondary${this.busy === `${r.id}:reject` ? ' is-loading' : ''}" type="button" data-decide="reject" data-id="${esc(r.id)}" ${busy ? 'disabled' : ''}>דחייה</button>
+        </div>
+      </article>`;
+  },
+  noticeRow(n) {
+    const name = empName(n.empId);
+    const d = describeNotice(n, { name, fmt: fmtTime, day: dayLabel(n.date) });
+    const isNew = this.newIds.has(n.id) || n.seen !== true;
+    return `
+      <li><button type="button" class="notice-row${isNew ? ' is-new' : ''}" data-notice="${esc(n.id)}" title="פתיחת הדף של ${esc(name)}">
+        <span class="dot" aria-hidden="true"></span>
+        ${avatar(empById(n.empId) || { name }, 'sm')}
+        <span class="notice-text"><span class="t">${esc(d.title)}</span><span class="muted num">${esc(d.detail)}</span></span>
+        ${typeof n.createdAt === 'number' ? `<span class="muted num when">${esc(whenLabel(n.createdAt))}</span>` : ''}
+      </button></li>`;
+  },
+  decidedRow(r) {
+    const [label, cls] = r.status === 'approved' ? ['אושרה', 'ok'] : r.status === 'rejected' ? ['נדחתה', 'no'] : ['בוטלה ע״י העובדת', 'muted'];
+    return `
+      <li><span>${esc(empName(r.empId))}</span>
+        <span class="muted">${fmtDayMonth(r.date)} · ${r.type === 'add' ? 'הוספה' : 'תיקון'} ${r.out ? rng(r.in, r.out) : `<span class="num">${fmtTime(r.in)}</span>`}</span>
+        <span class="spacer"></span><b class="req-status ${cls}">${label}</b></li>`;
+  },
+  async act(id, approve) {
+    if (this.busy) return;
+    const r = (state.requests || []).find((x) => x.id === id);
+    if (!r) return;
+    this.busy = `${id}:${approve ? 'approve' : 'reject'}`; this.update();
+    try {
+      await state.store.decideRequest(r, approve, effRate(empById(r.empId)));
+      toast(approve ? 'הבקשה אושרה והמשמרת עודכנה' : 'הבקשה נדחתה');
+    } catch (e) {
+      if (e instanceof RequestError) toast(e.message, { error: true });
+      else if (isOffline(e)) toast('אין חיבור לאינטרנט. כדי לאשר בקשה צריך חיבור, כדי לבדוק שהמשמרת לא שולמה בינתיים. שום דבר לא השתנה.', { error: true });
+      else fail(e);
+    } finally {
+      this.busy = null;
+      if (mounted.view === RequestsView) this.update();
+    }
+  },
+};
+
+/* ---------- "At work now": shifts running on the phones, shown above every page ---------- */
+let liveTimer = null;
+function renderLive() {
+  const box = $('#live');
+  if (!box) return;
+  const list = [...(state.openShifts || [])].sort((a, b) => (a.inAt || 0) - (b.inAt || 0));
+  box.hidden = !list.length || !state.employees;
+  if (box.hidden) { clearInterval(liveTimer); liveTimer = null; box.innerHTML = ''; return; }
+  liveTimer ??= setInterval(renderLive, 30000);
+  const now = Date.now();
+  box.innerHTML = list.map((s) => {
+    const name = empName(s.empId);
+    const mins = runningMinutes(s, now) ?? 0;
+    return `
+      <a class="live-row" href="#/e/${esc(s.empId)}" title="פתיחת הדף של ${esc(name)}">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="live-label">בעבודה עכשיו</span>
+        ${avatar(empById(s.empId) || { name }, 'sm')}
+        <b class="live-name">${esc(name)}</b>
+        <span class="muted">מאז <span class="num">${fmtTime(s.in)}</span></span>
+        ${mins >= 12 * 60 ? `<span class="live-warn">${icon('alert')}פתוחה יותר מ-12 שעות. אולי שכחה ללחוץ יציאה?</span>` : ''}
+        <span class="spacer"></span>
+        <b class="live-time num">${fmtHM(mins)}</b>
+      </a>`;
+  }).join('');
+}
+
+/** The count on "בקשות" in the menus: requests waiting + updates not seen yet. */
+function renderPhoneBadge() {
+  const n = pendingRequests(state.requests).length + unseenNotices(state.notices).length;
+  document.querySelectorAll('[data-badge="requests"]').forEach((b) => {
+    b.hidden = !n;
+    b.textContent = n > 99 ? '99+' : String(n);
+  });
+  document.querySelectorAll('[data-nav="requests"]').forEach((a) => a.setAttribute('aria-label', n ? `בקשות ועדכונים (${n} חדשים)` : 'בקשות ועדכונים'));
+}
+
+/** Something changed on the phones' side: only the parts that show it are redrawn (not the open page's forms). */
+function phoneChanged() {
+  renderLive();
+  renderPhoneBadge();
+  if (mounted.view === RequestsView || mounted.view === SettingsView) mounted.view.update();
+}
 
 /* =========================================================
    Wheel time picker
@@ -1932,9 +2156,10 @@ function parseRoute() {
   if (name === 'r' && id) return { name: 'report', id, nav: 'home' };
   if (name === 'summary') return { name: 'summary', nav: 'summary' };
   if (name === 'settings') return { name: 'settings', nav: 'settings' };
+  if (name === 'requests') return { name: 'requests', nav: 'requests' };
   return { name: 'home', nav: 'home' };
 }
-const VIEWS = { home: HomeView, employee: EmployeeView, report: ReportView, summary: SummaryView, settings: SettingsView };
+const VIEWS = { home: HomeView, employee: EmployeeView, report: ReportView, summary: SummaryView, settings: SettingsView, requests: RequestsView };
 
 function route() {
   const r = parseRoute();
@@ -1942,7 +2167,7 @@ function route() {
   document.querySelectorAll('[data-nav]').forEach((a) => {
     if (a.dataset.nav === r.nav) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  $('.month-switch').hidden = r.name === 'settings' || (r.name === 'summary' && SummaryView.mode !== 'month');
+  $('.month-switch').hidden = r.name === 'settings' || r.name === 'requests' || (r.name === 'summary' && SummaryView.mode !== 'month');
   if (mounted.key === key) { mounted.view.update(); return; }
   mounted.view?.unmount?.();
   const view = VIEWS[r.name];
@@ -1974,7 +2199,7 @@ function setMonth(month, { keepForm = false } = {}) {
   refresh();
 }
 
-const refresh = () => { if (mounted.view) mounted.view.update(); syncFmtToggles(); };
+const refresh = () => { if (mounted.view) mounted.view.update(); syncFmtToggles(); renderLive(); };
 
 /* =========================================================
    Data subscriptions + auth
@@ -2000,6 +2225,11 @@ function subscribeAll() {
   unsubs.push(state.store.watchSettings((s) => { state.settings = s; refresh(); }, onDataError));
   unsubs.push(state.store.watchEmployees((list) => { state.employees = list; refresh(); }, onDataError));
   subscribeShifts();
+  // The employees' phones
+  unsubs.push(state.store.watchOpenShifts((list) => { state.openShifts = list; phoneChanged(); }, onDataError));
+  unsubs.push(state.store.watchDevices((list) => { state.devices = list; phoneChanged(); }, onDataError));
+  unsubs.push(state.store.watchRequests((list) => { state.requests = list; phoneChanged(); }, onDataError));
+  unsubs.push(state.store.watchNotices((list) => { state.notices = sortNotices(list); phoneChanged(); }, onDataError));
 }
 
 function showScreen(name) {
@@ -2048,6 +2278,8 @@ async function main() {
     if (!user) {
       unsubs.forEach((u) => u()); unsubs = []; unsubShifts?.(); unsubShifts = null;
       state.settings = state.employees = state.shifts = null;
+      state.openShifts = state.devices = state.requests = state.notices = null;
+      phoneChanged();
       mounted.view?.unmount?.();
       mounted = { key: null, view: null };
       showScreen('login');

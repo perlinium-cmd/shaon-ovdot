@@ -2,6 +2,8 @@
 //   - Firebase (Firestore + Google sign-in) — production
 //   - Demo (localStorage) — open the site with ?demo to try it without an account
 
+import { decisionOps, plainDoc, localMillis } from './phone.js';
+
 const DEMO = new URLSearchParams(location.search).has('demo');
 
 export async function createStore() {
@@ -28,6 +30,8 @@ async function createFirebaseStore() {
   });
 
   const snapList = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  /** Docs the phones write carry server Timestamps (createdAt, pairedAt…): read them as ms numbers. */
+  const plainList = (snap) => snap.docs.map((d) => ({ id: d.id, ...plainDoc(d.data({ serverTimestamps: 'estimate' })) }));
 
   /* Firestore applies a write on the device at once (the persistent cache keeps it in IndexedDB, so it
      survives the app closing or the device turning off) and sends it to the server when it can. Its promise,
@@ -201,11 +205,106 @@ async function createFirebaseStore() {
     addPayment: (data) => add('payments', { ...data, createdAt: Date.now() }),
     updatePayment: (id, data) => settle(fs.updateDoc(docRef('payments', id), data)),
     deletePayment: (id) => settle(fs.deleteDoc(docRef('payments', id))),
+
+    /* ---------- employee phones (same as the Mac: FirestoreStore.swift) ---------- */
+    /** Shifts running right now (clocked in from a phone), in any month. */
+    watchOpenShifts(cb, onErr) {
+      return fs.onSnapshot(fs.query(colRef('shifts'), fs.where('open', '==', true)), (s) => cb(plainList(s)), onErr);
+    },
+    watchDevices(cb, onErr) { return fs.onSnapshot(colRef('devices'), (s) => cb(plainList(s)), onErr); },
+    watchRequests(cb, onErr) { return fs.onSnapshot(colRef('requests'), (s) => cb(plainList(s)), onErr); },
+    watchNotices(cb, onErr) {
+      const q = fs.query(colRef('notices'), fs.orderBy('createdAt', 'desc'), fs.limit(150));
+      return fs.onSnapshot(q, (s) => cb(plainList(s)), onErr);
+    },
+    markNoticesSeen(ids) { return store.commit(ids.map((id) => ({ op: 'update', col: 'notices', id, data: { seen: true } }))); },
+    /** Disconnect a phone: its record and its reconnect key go together, so it cannot reconnect by itself. */
+    disconnect(d) {
+      const batch = fs.writeBatch(db);
+      batch.delete(docRef('devices', d.id));
+      if (typeof d.keyId === 'string' && d.keyId) batch.delete(docRef('deviceKeys', d.keyId));
+      return settle(batch.commit());
+    },
+    /** Approve or reject a request from the phone. One transaction: the request (still pending) and the shift
+     *  (not paid) are read from the server and written together, so a paid shift is never changed and a request
+     *  approved on two devices at once never adds two shifts. Needs a connection (offline: code 'unavailable'). */
+    async decideRequest(req, approve, rate) {
+      const reqRef = docRef('requests', req.id);
+      const newRef = fs.doc(colRef('shifts'));
+      await fs.runTransaction(db, async (tx) => {
+        const rs = await tx.get(reqRef);
+        const cur = rs.exists() ? { id: req.id, ...plainDoc(rs.data()) } : null;
+        let shift = null;
+        if (approve && cur?.type === 'fix' && cur.shiftId) {
+          const ss = await tx.get(docRef('shifts', cur.shiftId));
+          shift = ss.exists() ? ss.data() : null;
+        }
+        const ops = decisionOps({ req: cur, shift, approve, rate, now: fs.serverTimestamp(), newShiftId: newRef.id, createdAt: Date.now() });
+        for (const { op, col, id, data } of ops) {
+          if (op === 'set') tx.set(docRef(col, id), data); else tx.update(docRef(col, id), data);
+        }
+      });
+    },
   };
   return store;
 }
 
 /* ---------------- Demo (localStorage) ---------------- */
+
+const PHONE_COLS = ['devices', 'deviceKeys', 'requests', 'notices'];
+
+/** Demo only: once there is an employee, pretend her phone is connected — a running shift, two requests waiting
+ *  and a change saved on the phone — so the phone screens can be tried (like the Mac's demo). Once per demo. */
+function seedPhoneDemo(data, uid) {
+  if (data.phoneDemo) return false;
+  const emps = Object.entries(data.employees).filter(([, e]) => e.active !== false)
+    .sort(([, a], [, b]) => (a.createdAt || 0) - (b.createdAt || 0));
+  if (!emps.length) return false;
+  data.phoneDemo = true;
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const now = Date.now();
+  const [a] = emps[0];
+  const b = (emps[1] || emps[0])[0];
+  const devId = `ph-${uid()}`; const keyId = `k${uid()}${uid()}${uid()}${uid()}`;
+  data.devices[devId] = { empId: a, model: 'Galaxy A54', pairedAt: now - 86400000, keyId };
+  data.deviceKeys[keyId] = { empId: a, deviceId: devId, createdAt: now - 86400000 };
+  // Clocked in 3:42 ago.
+  const start = new Date(now - (3 * 60 + 42) * 60000);
+  data.shifts[`live-${uid()}`] = {
+    empId: a, date: day(start), month: day(start).slice(0, 7), in: hm(start), out: '',
+    source: 'phone', open: true, inAt: start.getTime(), syncedAt: start.getTime() + 900, deviceId: devId, createdAt: start.getTime(),
+  };
+  // A forgotten shift (yesterday), and a fix of her last finished shift if she has one.
+  const y = new Date(now - 86400000);
+  data.requests[`r-${uid()}`] = {
+    empId: a, type: 'add', date: day(y), in: '08:00', out: '12:30', note: 'שכחתי לרשום את המשמרת',
+    status: 'pending', createdAt: now - 45 * 60000, deviceId: devId,
+  };
+  const last = Object.entries(data.shifts)
+    .filter(([, s]) => s.empId === a && !s.open && !s.paid && s.out)
+    .sort(([, p], [, q]) => String(q.date).localeCompare(String(p.date)) || String(q.in).localeCompare(String(p.in)))[0];
+  if (last) {
+    const [sid, s] = last;
+    const [h, m] = s.out.split(':').map(Number);
+    const later = `${pad((h + (m >= 30 ? 1 : 0)) % 24)}:${pad((m + 30) % 60)}`;
+    data.requests[`r-${uid()}`] = {
+      empId: a, type: 'fix', shiftId: sid, date: s.date, in: s.in, out: later, note: 'שכחתי ללחוץ יציאה',
+      status: 'pending', createdAt: now - 30 * 60000, deviceId: devId,
+    };
+  }
+  // A shift she typed in herself after work (saved without approval; the manager only hears about it).
+  const typedDay = new Date(now).getHours() >= 12 ? day(new Date(now)) : day(y);
+  const mid = `m-${uid()}`; const nid = `n-${uid()}`;
+  data.shifts[mid] = {
+    empId: b, date: typedDay, month: typedDay.slice(0, 7), in: '07:30', out: '11:15',
+    inAt: localMillis(typedDay, '07:30'), outAt: localMillis(typedDay, '11:15'),
+    source: 'phone', open: false, manual: true, deviceId: devId, noticeId: nid, createdAt: now - 20 * 60000,
+  };
+  data.notices[nid] = { empId: b, type: 'manual', shiftId: mid, date: typedDay, in: '07:30', out: '11:15', createdAt: now - 20 * 60000, deviceId: devId };
+  return true;
+}
 
 function createDemoStore() {
   const KEY = 'shaon-demo-v1';
@@ -214,6 +313,7 @@ function createDemoStore() {
   };
   let data = load() || { settings: {}, employees: {}, shifts: {} };
   data.payments ||= {};
+  for (const c of PHONE_COLS) data[c] ||= {};
   const listeners = new Set();
   const persist = () => {
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignore */ }
@@ -227,6 +327,8 @@ function createDemoStore() {
     return () => listeners.delete(fn);
   };
   const delay = () => new Promise((r) => setTimeout(r, 120));
+  const list = (col, keep = () => true) => Object.entries(data[col]).filter(([, d]) => keep(d)).map(([id, d]) => ({ id, ...clone(d) }));
+  if (seedPhoneDemo(data, uid)) persist();
 
   return {
     demo: true,
@@ -238,7 +340,7 @@ function createDemoStore() {
     async saveSettings(d) { await delay(); data.settings = { ...data.settings, ...d }; persist(); },
 
     watchEmployees: (cb) => watch(() => cb(Object.entries(data.employees).map(([id, e]) => ({ id, ...e })))),
-    async addEmployee(d) { await delay(); const id = uid(); data.employees[id] = { ...d, createdAt: Date.now() }; persist(); return { id }; },
+    async addEmployee(d) { await delay(); const id = uid(); data.employees[id] = { ...d, createdAt: Date.now() }; seedPhoneDemo(data, uid); persist(); return { id }; },
     async updateEmployee(id, d) { await delay(); data.employees[id] = { ...data.employees[id], ...d }; persist(); },
 
     watchShifts: (month, cb) => watch(() => cb(
@@ -251,7 +353,7 @@ function createDemoStore() {
     async countEmployeeShifts(id) { return Object.values(data.shifts).filter((s) => s.empId === id).length; },
     async employeeBundle(id) {
       const out = data.employees[id] ? [{ col: 'employees', id, data: clone(data.employees[id]) }] : [];
-      for (const col of ['shifts', 'payments']) {
+      for (const col of ['shifts', 'payments', ...PHONE_COLS]) {
         Object.entries(data[col]).forEach(([did, d]) => { if (d.empId === id) out.push({ col, id: did, data: clone(d) }); });
       }
       return out;
@@ -289,5 +391,25 @@ function createDemoStore() {
     async addPayment(d) { await delay(); const id = uid(); data.payments[id] = { ...d, createdAt: Date.now() }; persist(); return { id }; },
     async updatePayment(id, d) { await delay(); data.payments[id] = { ...data.payments[id], ...d }; persist(); },
     async deletePayment(id) { await delay(); delete data.payments[id]; persist(); },
+
+    watchOpenShifts: (cb) => watch(() => cb(list('shifts', (s) => s.open === true))),
+    watchDevices: (cb) => watch(() => cb(list('devices'))),
+    watchRequests: (cb) => watch(() => cb(list('requests'))),
+    watchNotices: (cb) => watch(() => cb(list('notices').sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)).slice(0, 150))),
+    async markNoticesSeen(ids) { await delay(); ids.forEach((id) => { if (data.notices[id]) data.notices[id].seen = true; }); persist(); },
+    async disconnect(d) {
+      await delay();
+      delete data.devices[d.id];
+      if (typeof d.keyId === 'string' && d.keyId) delete data.deviceKeys[d.keyId];
+      persist();
+    },
+    async decideRequest(req, approve, rate) {
+      await delay();
+      const cur = data.requests[req.id] ? { id: req.id, ...clone(data.requests[req.id]) } : null;
+      const shift = approve && cur?.type === 'fix' && cur.shiftId && data.shifts[cur.shiftId] ? clone(data.shifts[cur.shiftId]) : null;
+      const ops = decisionOps({ req: cur, shift, approve, rate, now: Date.now(), newShiftId: uid(), createdAt: Date.now() });
+      for (const { op, col, id, data: d } of ops) data[col][id] = op === 'set' ? clone(d) : { ...data[col][id], ...clone(d) };
+      persist();
+    },
   };
 }

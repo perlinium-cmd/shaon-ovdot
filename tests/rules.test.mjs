@@ -1,12 +1,14 @@
 // Firestore security rules tests. Runs against the local emulator only (project "demo-shaon").
 // Run: npm run test:rules
 import { describe, it, before, beforeEach, after } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, getDocs,
-  writeBatch, serverTimestamp, deleteField, Timestamp,
+  writeBatch, serverTimestamp, deleteField, Timestamp, runTransaction, orderBy, limit,
 } from 'firebase/firestore';
+import { decisionOps, plainDoc, RequestError } from '../public/phone.js';
 
 const OWNER = 'boss';
 const CODE = 'K7QM4XPA';
@@ -366,6 +368,57 @@ describe('connected phone: correction requests', () => {
     const ref = await addDoc(reqs(phoneDb()), fix());
     await assertSucceeds(updateDoc(doc(ownerDb(), ref.path), { status: 'approved', decidedAt: serverTimestamp() }));
   });
+
+  /** The website's approve/reject (public/data.js → decideRequest): one transaction with public/phone.js's writes. */
+  const webDecide = (db, reqId, approve, rate = 40) => {
+    const newRef = doc(collection(db, 'users', OWNER, 'shifts'));
+    return runTransaction(db, async (tx) => {
+      const rs = await tx.get(u(db, 'requests', reqId));
+      const cur = rs.exists() ? { id: reqId, ...plainDoc(rs.data()) } : null;
+      let shift = null;
+      if (approve && cur?.type === 'fix' && cur.shiftId) {
+        const ss = await tx.get(u(db, 'shifts', cur.shiftId));
+        shift = ss.exists() ? ss.data() : null;
+      }
+      const ops = decisionOps({ req: cur, shift, approve, rate, now: serverTimestamp(), newShiftId: newRef.id, createdAt: Date.now() });
+      for (const o of ops) { if (o.op === 'set') tx.set(u(db, o.col, o.id), o.data); else tx.update(u(db, o.col, o.id), o.data); }
+      return newRef.id;
+    });
+  };
+  it('the website approves a fix: the shift and the request change together', async () => {
+    const ref = await addDoc(reqs(phoneDb()), fix());
+    await assertSucceeds(webDecide(ownerDb(), ref.id, true));
+    const s = (await getDoc(u(ownerDb(), 'shifts', 'm1'))).data();
+    assert.equal(s.out, '14:30'); assert.equal(s.fixedBy, ref.id); assert.equal(s.rate, 40); assert.equal(s.open, false);
+    assert.equal((await getDoc(doc(ownerDb(), ref.path))).data().status, 'approved');
+    // Once decided, a second approval (another device) changes nothing.
+    await assert.rejects(webDecide(ownerDb(), ref.id, true), (e) => e instanceof RequestError && e.code === 'notPending');
+  });
+  it('the website approves an add: one new shift from the request', async () => {
+    const { shiftId, ...add } = fix({ type: 'add', date: '2026-11-01', in: '09:00', out: '12:00' });
+    const ref = await addDoc(reqs(phoneDb()), add);
+    const id = await webDecide(ownerDb(), ref.id, true, 42);
+    const s = (await getDoc(u(ownerDb(), 'shifts', id))).data();
+    assert.deepEqual([s.empId, s.date, s.in, s.out, s.rate, s.source, s.requestId, s.paid], ['e1', '2026-11-01', '09:00', '12:00', 42, 'request', ref.id, false]);
+    assert.equal((await getDoc(doc(ownerDb(), ref.path))).data().shiftId, id);
+    // The phone still sees its own new shift.
+    await assertSucceeds(getDoc(u(phoneDb(), 'shifts', id)));
+  });
+  it('the website refuses to approve a fix of a paid shift, and nothing changes', async () => {
+    const ref = await addDoc(reqs(phoneDb()), fix({ shiftId: 'paid1', date: '2026-11-03', in: '07:30', out: '' }));
+    await assert.rejects(webDecide(ownerDb(), ref.id, true), (e) => e instanceof RequestError && e.code === 'alreadyPaid');
+    assert.equal((await getDoc(doc(ownerDb(), ref.path))).data().status, 'pending');
+    assert.equal((await getDoc(u(ownerDb(), 'shifts', 'paid1'))).data().in, '08:00');
+  });
+  it('the website rejects; a request the phone withdrew is not overwritten', async () => {
+    const a = await addDoc(reqs(phoneDb()), fix());
+    await assertSucceeds(webDecide(ownerDb(), a.id, false));
+    assert.equal((await getDoc(doc(ownerDb(), a.path))).data().status, 'rejected');
+    const b = await addDoc(reqs(phoneDb()), fix());
+    await updateDoc(b, { status: 'cancelled', decidedAt: serverTimestamp() });
+    await assert.rejects(webDecide(ownerDb(), b.id, false), (e) => e instanceof RequestError && e.code === 'notPending');
+    assert.equal((await getDoc(doc(ownerDb(), b.path))).data().status, 'cancelled');
+  });
 });
 
 describe('connected phone: saved without approval (with a notice for the manager)', () => {
@@ -413,6 +466,13 @@ describe('connected phone: saved without approval (with a notice for the manager
     await assertFails(getDoc(doc(phoneDb(), m.nRef.path)));
     await assertFails(getDocs(notices(phoneDb())));
     await assertSucceeds(getDoc(doc(ownerDb(), m.nRef.path)));
+  });
+  it('the website lists the notices (newest first) and marks them seen; the phone cannot', async () => {
+    const m = manual(phoneDb());
+    await m.commit();
+    await assertSucceeds(getDocs(query(notices(ownerDb()), orderBy('createdAt', 'desc'), limit(150))));
+    await assertFails(updateDoc(doc(phoneDb(), m.nRef.path), { seen: true }));
+    await assertSucceeds(updateDoc(doc(ownerDb(), m.nRef.path), { seen: true }));
   });
   it('cannot add a shift without the notice, or a notice without a shift', async () => {
     await assertFails(manual(phoneDb(), {}, { notice: false }).commit());
