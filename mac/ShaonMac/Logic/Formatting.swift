@@ -25,6 +25,13 @@ func fmtMonth(_ m: String) -> String { fmt("LLLL yyyy", parseDate(m + "-01")) }
 func fmtMonthName(_ m: String) -> String { fmt("LLLL", parseDate(m + "-01")) }
 func fmtWeekday(_ d: String) -> String { fmt("EEE", parseDate(d)) }
 func fmtDayMonth(_ d: String) -> String { let c = gregorian.dateComponents([.day, .month], from: parseDate(d)); return "\(c.day!)/\(c.month!)" }
+/// A rate as it is typed: 45, 45.5, 45.25 (never "45.0"). Rates are whole agorot, so two decimals are exact.
+func fmtNum(_ n: Double) -> String {
+    var s = String(format: "%.2f", n)
+    while s.hasSuffix("0") { s.removeLast() }
+    if s.hasSuffix(".") { s.removeLast() }
+    return s
+}
 func nShifts(_ n: Int) -> String { n == 1 ? "משמרת אחת" : "\(n) משמרות" }
 
 func avatarColor(_ name: String) -> Color {

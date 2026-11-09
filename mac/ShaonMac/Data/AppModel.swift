@@ -375,7 +375,10 @@ final class AppModel {
         }
         if !rates.isEmpty { try await store.setRates(rates) }
     }
-    func deleteEmployee(_ e: Employee) async { do { try await store.deleteEmployee(e.id); say("\(e.name) נמחקה") } catch { fail(error) } }
+    @discardableResult
+    func deleteEmployee(_ e: Employee) async -> Bool {
+        do { try await store.deleteEmployee(e.id); say("\(e.name) נמחקה"); return true } catch { fail(error); return false }
+    }
     @discardableResult
     func saveSettings(_ change: (inout AppSettings) -> Void) async -> Bool {
         var s = settings ?? AppSettings()

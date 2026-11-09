@@ -507,8 +507,8 @@ function employeeSheet(emp = null) {
     }
     if (submitter?.value === 'archive') {
       const archiving = emp.active !== false;
-      await state.store.updateEmployee(emp.id, { active: !archiving });
-      toast(archiving ? `${emp.name} הועברה לארכיון` : `${emp.name} הוחזרה לרשימה`);
+      await withUndo(archiving ? `${emp.name} הועברה לארכיון` : `${emp.name} הוחזרה לרשימה`, [{ col: 'employees', id: emp.id }],
+        () => state.store.updateEmployee(emp.id, { active: !archiving }));
       if (archiving) location.hash = '#/';
       return true;
     }
@@ -1641,7 +1641,9 @@ const SettingsView = {
       applyWrap.hidden = !list.length;
       $('#s-apply-txt').textContent = `לעדכן גם את ${list.length === 1 ? 'המשמרת' : `${list.length} המשמרות`} של ${fmtMonth(state.month)} שעוד לא שולמו (של עובדות בתעריף הכללי)`;
     };
-    input.addEventListener('input', sync);
+    this.shownRate = def ?? null; // what the field was filled with (see update: a change from another device)
+    this.syncApply = sync;
+    input.addEventListener('input', () => { $('#s-rate-err').textContent = ''; sync(); });
 
     $('#rate-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1659,6 +1661,7 @@ const SettingsView = {
         }
         await state.store.saveSettings({ defaultRate: r });
         if (list.length) await state.store.updateShifts(list.map((s) => s.id), { rate: r });
+        this.shownRate = r;
         toast('התעריף נשמר');
         applyWrap.hidden = true;
       } catch (err) {
@@ -1676,6 +1679,15 @@ const SettingsView = {
   },
   update() {
     if (!this.built) { if (isLoaded()) this.build(); return; }
+    // The rate was changed on another device while this page is open: show the new one, unless it is being edited here
+    // (otherwise "שמירה" would quietly put the old rate back).
+    const input = $('#s-rate');
+    const def = state.settings.defaultRate ?? null;
+    if (input && def !== this.shownRate && document.activeElement !== input && parseRate(input.value) === this.shownRate) {
+      input.value = def ?? '';
+      this.shownRate = def;
+      this.syncApply?.();
+    }
     this.renderArchived();
     this.renderPhones();
   },
@@ -1732,7 +1744,12 @@ const SettingsView = {
           <button class="btn btn-ghost" type="button" data-restore="${e.id}">החזרה</button></li>`).join('')}
       </ul>`;
     box.querySelectorAll('[data-restore]').forEach((b) => b.addEventListener('click', async () => {
-      try { await state.store.updateEmployee(b.dataset.restore, { active: true }); toast('העובדת הוחזרה לרשימה'); } catch (e) { fail(e); }
+      if (b.disabled) return;
+      b.disabled = true; b.classList.add('is-loading');
+      const name = empById(b.dataset.restore)?.name;
+      try { await state.store.updateEmployee(b.dataset.restore, { active: true }); toast(name ? `${name} הוחזרה לרשימה` : 'העובדת הוחזרה לרשימה'); } catch (e) {
+        fail(e); b.disabled = false; b.classList.remove('is-loading');
+      }
     }));
   },
 };
