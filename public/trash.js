@@ -16,14 +16,15 @@ export const trashId = (col, id) => `${col}__${id}`;
  * Writes [{op: 'set'|'update'|'delete', col, id, data}] in as few batches as the limits allow.
  *   fs      the Firestore module (writeBatch, serverTimestamp)
  *   ref     (col, id) -> DocumentReference in the manager's space
- *   read    ref -> DocumentSnapshot (the app reads its own copy first, so this works offline)
+ *   read    ref -> DocumentSnapshot (the server's version: the rules check the copy against it)
  *   commit  batch -> Promise (the app's settle())
  */
 export async function writeWithTrash({ fs, db, ref, read, commit, by, ops }) {
+  // Every copy is read first (all at once), so a read that fails writes nothing.
+  const snaps = await Promise.all(ops.map(({ op, col, id }) => (op === 'delete' && TRASHED.includes(col) ? read(ref(col, id)) : null)));
   let batch = fs.writeBatch(db), writes = 0, copies = 0;
-  for (const { op, col, id, data } of ops) {
-    const snap = op === 'delete' && TRASHED.includes(col) ? await read(ref(col, id)) : null;
-    const copy = snap?.exists() ? snap.data() : null;
+  for (const [i, { op, col, id, data }] of ops.entries()) {
+    const copy = snaps[i]?.exists() ? snaps[i].data() : null;
     const n = copy ? 2 : 1;
     if (writes && (writes + n > MAX_WRITES || (copy && copies === TRASH_PER_BATCH))) {
       await commit(batch);
