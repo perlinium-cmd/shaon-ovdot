@@ -16,3 +16,6 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+
+# Phone app APKs are published on github.com/perlinium-cmd/shaon-android (Firebase Spark refuses them)
+public/android/*.apk

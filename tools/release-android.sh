@@ -3,16 +3,18 @@
 #
 #   1. bump versionCode (+1) and versionName in android/app/build.gradle.kts
 #   2. tools/release-android.sh
-#   3. commit public/android/ with the change, open a PR, merge -> the Deploy workflow puts it on
-#      https://shaon-ovdot-2c10.web.app/android/ and every phone offers the update the next time the app opens.
+#   3. commit public/android/latest.json with the change, open a PR, merge -> the Deploy workflow puts it on
+#      https://shaon-ovdot-2c10.web.app/android/latest.json and every phone offers the update the next time the app opens.
 #
-# The same address is also the link for a first install: https://shaon-ovdot-2c10.web.app/android/shaon.apk
+# The APK itself goes to a release on the public repo perlinium-cmd/shaon-android (Firebase's free plan refuses APKs).
+# Link for a first install (redirects to the newest release): https://shaon-ovdot-2c10.web.app/android/shaon.apk
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GRADLE="$ROOT/android/app/build.gradle.kts"
 OUT="$ROOT/public/android"
 KEEP="$HOME/.shaon"
+REPO="perlinium-cmd/shaon-android"
 CERT="50aa5fb63125f6a2ab20919012eef88f63d7798a3e7fdd666b23290b4625ab37"   # the release key (never replace it)
 SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 APKSIGNER="$(ls -d "$SDK"/build-tools/*/apksigner | sort -V | tail -1)"
@@ -40,20 +42,28 @@ echo "== Checking the signature"
   || { echo "NOT signed with the release key – stopping (phones would refuse this update)."; exit 1; }
 
 mkdir -p "$OUT" "$KEEP"
-cp "$APK" "$OUT/shaon.apk"
 cp "$APK" "$KEEP/שעון-עובדות-$name.apk"
-sha="$(shasum -a 256 "$OUT/shaon.apk" | cut -d' ' -f1)"
-size="$(stat -f%z "$OUT/shaon.apk")"
+STAGE="$(mktemp -d)"
+cp "$APK" "$STAGE/shaon.apk"            # the asset name the links rely on
+sha="$(shasum -a 256 "$STAGE/shaon.apk" | cut -d' ' -f1)"
+size="$(stat -f%z "$STAGE/shaon.apk")"
+
+echo "== Publishing release v$name on $REPO"
+gh release create "v$name" "$STAGE/shaon.apk" --repo "$REPO" --title "$name" --notes "Employee app $name (versionCode $code)."
+url="https://github.com/$REPO/releases/download/v$name/shaon.apk"
+[ "$(curl -sfL "$url" | shasum -a 256 | cut -d' ' -f1)" = "$sha" ] \
+  || { echo "The published APK does not match – stopping before latest.json is written."; exit 1; }
+
 cat > "$OUT/latest.json" <<EOF
 {
   "versionCode": $code,
   "versionName": "$name",
-  "url": "shaon.apk",
+  "url": "$url",
   "sha256": "$sha",
   "size": $size
 }
 EOF
 
 echo
-echo "Ready: public/android/shaon.apk ($name, $size bytes) + latest.json, copy kept in $KEEP."
-echo "Next: commit public/android/ and android/app/build.gradle.kts, open a PR, merge. Phones update from there."
+echo "Ready: release v$name ($size bytes) is on $REPO, latest.json written, copy kept in $KEEP."
+echo "Next: commit public/android/latest.json and android/app/build.gradle.kts, open a PR, merge. Phones update from there."

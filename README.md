@@ -6,7 +6,7 @@
 
 ## אפליקציית האנדרואיד לעובדות
 - התקנה ראשונה: לשלוח לעובדת את הקישור https://shaon-ovdot-2c10.web.app/android/shaon.apk
-- גרסה חדשה: להעלות `versionCode` ו-`versionName` ב-`android/app/build.gradle.kts`, להריץ `tools/release-android.sh`, ולמזג PR עם `public/android/`. הטלפונים יציגו "יש גרסה חדשה" בפעם הבאה שהאפליקציה תיפתח.
+- גרסה חדשה: להעלות `versionCode` ו-`versionName` ב-`android/app/build.gradle.kts`, להריץ `tools/release-android.sh`, ולמזג PR עם `public/android/latest.json`. הסקריפט מעלה את ה-APK ל-release במאגר הציבורי [shaon-android](https://github.com/perlinium-cmd/shaon-android) (Firebase בחינם לא מאפשר קבצי APK). הטלפונים יציגו "יש גרסה חדשה" בפעם הבאה שהאפליקציה תיפתח.
 
 ## תהליך עבודה
 1. `main` הוא הענף היציב – לא דוחפים אליו ישירות.
