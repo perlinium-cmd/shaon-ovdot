@@ -9,6 +9,8 @@ import {
   writeBatch, serverTimestamp, deleteField, Timestamp, runTransaction, orderBy, limit,
 } from 'firebase/firestore';
 import { decisionOps, plainDoc, RequestError } from '../public/phone.js';
+import * as fsMod from 'firebase/firestore';
+import { writeWithTrash, trashId, TRASH_PER_BATCH } from '../public/trash.js';
 
 const OWNER = 'boss';
 const CODE = 'K7QM4XPA';
@@ -551,5 +553,66 @@ describe('connected phone: saved without approval (with a notice for the manager
     const id = await clockIn();
     await assertFails(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN, rate: 99 }));
     await assertFails(fix(phoneDb(), id, { in: '06:44', inAt: Date.now() - 90 * MIN, date: '2026-11-04' }));
+  });
+});
+
+describe('recycle bin (web data layer, public/trash.js)', () => {
+  /** The web app's write path, against the emulator; returns how many batches it took. */
+  async function write(ops, db = ownerDb()) {
+    let batches = 0;
+    await writeWithTrash({ fs: fsMod, db, ref: (c, id) => u(db, c, id), read: getDoc, by: OWNER, ops,
+      commit: (b) => { batches++; return b.commit(); } });
+    return batches;
+  }
+  const trash = async (col, id) => (await getDoc(u(ownerDb(), 'trash', trashId(col, id)))).data();
+
+  it('a deleted shift is gone from shifts and kept whole in the bin', async () => {
+    const before = (await getDoc(u(ownerDb(), 'shifts', 'm1'))).data();
+    await write([{ op: 'delete', col: 'shifts', id: 'm1' }]);
+    assert.equal((await getDoc(u(ownerDb(), 'shifts', 'm1'))).exists(), false);
+    const t = await trash('shifts', 'm1');
+    assert.deepEqual(t.data, before);
+    assert.equal(t.col, 'shifts'); assert.equal(t.id, 'm1'); assert.equal(t.by, OWNER);
+    assert.ok(t.deletedAt instanceof Timestamp);
+  });
+  it('deleting an employee with many shifts keeps every one, in small batches', async () => {
+    const ops = [{ op: 'delete', col: 'employees', id: 'e1' }];
+    await seed(async (db) => {
+      for (let i = 0; i < 12; i++) {
+        await setDoc(u(db, 'shifts', `bulk${i}`), { empId: 'e1', date: '2026-11-05', month: '2026-11', in: '08:00', out: '12:00', rate: 40 });
+        ops.push({ op: 'delete', col: 'shifts', id: `bulk${i}` });
+      }
+    });
+    const batches = await write(ops);
+    assert.equal(batches, Math.ceil(13 / TRASH_PER_BATCH));
+    assert.equal((await trash('employees', 'e1')).data.name, 'נועה');
+    for (let i = 0; i < 12; i++) assert.equal((await trash('shifts', `bulk${i}`)).data.empId, 'e1');
+  });
+  it('a payment undone together with its shifts is still one batch (all or nothing)', async () => {
+    const batches = await write([
+      { op: 'delete', col: 'payments', id: 'p1' },
+      { op: 'update', col: 'shifts', id: 'm1', data: { paid: false } },
+      { op: 'update', col: 'shifts', id: 'paid1', data: { paid: false } },
+    ]);
+    assert.equal(batches, 1);
+    assert.equal((await trash('payments', 'p1')).data.amount, 240);
+  });
+  it('delete, undo, delete again: the bin keeps the latest copy', async () => {
+    await write([{ op: 'delete', col: 'shifts', id: 'm1' }]);
+    const t = await trash('shifts', 'm1');
+    await write([{ op: 'set', col: 'shifts', id: 'm1', data: { ...t.data, out: '18:00' } }]);
+    await write([{ op: 'delete', col: 'shifts', id: 'm1' }]);
+    assert.equal((await trash('shifts', 'm1')).data.out, '18:00');
+  });
+  it('deleting something already gone, or a phone record, writes no copy', async () => {
+    await write([{ op: 'delete', col: 'shifts', id: 'nothing-here' }, { op: 'delete', col: 'notices', id: 'n0' }]);
+    assert.equal(await trash('shifts', 'nothing-here'), undefined);
+    assert.equal(await trash('notices', 'n0'), undefined);
+  });
+  it('phones cannot read or write the bin', async () => {
+    await pairPhone();
+    await write([{ op: 'delete', col: 'shifts', id: 'm1' }]);
+    await assertFails(getDoc(u(phoneDb(), 'trash', trashId('shifts', 'm1'))));
+    await assertFails(setDoc(u(phoneDb(), 'trash', 'shifts__x'), { col: 'shifts', id: 'x', data: { empId: 'e1' } }));
   });
 });
