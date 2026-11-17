@@ -3,6 +3,7 @@
 //   - Demo (localStorage) — open the site with ?demo to try it without an account
 
 import { decisionOps, plainDoc, localMillis } from './phone.js';
+import { writeWithTrash } from './trash.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo');
 
@@ -59,6 +60,8 @@ async function createFirebaseStore() {
   let uid = null;
   const docRef = (...segs) => fs.doc(db, 'users', uid, ...segs);
   const colRef = (name) => fs.collection(db, 'users', uid, name);
+  /** Every write that may delete goes through here: deleted employees/shifts/payments go to the recycle bin (trash.js). */
+  const write = (ops) => writeWithTrash({ fs, db, ref: docRef, read: getLocalFirst, commit: (b) => settle(b.commit()), by: uid, ops });
 
   /** One-time move of data saved before per-user spaces existed (root collections, owner-only). */
   async function migrateLegacy() {
@@ -131,7 +134,7 @@ async function createFirebaseStore() {
     },
     addShift: (data) => add('shifts', { ...data, createdAt: Date.now() }),
     updateShift: (id, data) => settle(fs.updateDoc(docRef('shifts', id), data)),
-    deleteShift: (id) => settle(fs.deleteDoc(docRef('shifts', id))),
+    deleteShift: (id) => write([{ op: 'delete', col: 'shifts', id }]),
     async updateShifts(ids, data) {
       for (let i = 0; i < ids.length; i += 400) {
         const batch = fs.writeBatch(db);
@@ -155,18 +158,9 @@ async function createFirebaseStore() {
     },
     /** A new document id, known before anything is written. */
     newId: (col) => fs.doc(colRef(col)).id,
-    /** Several writes as one: all of them happen, or none (up to 450 per batch; [{op: set|update|delete, col, id, data}]). */
-    async commit(ops) {
-      for (let i = 0; i < ops.length; i += 450) {
-        const batch = fs.writeBatch(db);
-        for (const { op, col, id, data } of ops.slice(i, i + 450)) {
-          if (op === 'set') batch.set(docRef(col, id), data);
-          else if (op === 'update') batch.update(docRef(col, id), data);
-          else batch.delete(docRef(col, id));
-        }
-        await settle(batch.commit());
-      }
-    },
+    /** Several writes as one: all of them happen, or none (up to 450 writes and TRASH_PER_BATCH deletes per batch;
+     *  [{op: set|update|delete, col, id, data}]). */
+    commit: (ops) => write(ops),
     /** Current contents of the given docs ({col, id}) → [{col, id, data|null}]. */
     snapshot(items) {
       return Promise.all(items.map(async ({ col, id }) => {
@@ -174,14 +168,8 @@ async function createFirebaseStore() {
         return { col, id, data: d.exists() ? d.data() : null };
       }));
     },
-    /** Write docs back exactly (data null = delete). Used for delete-employee and undo. */
-    async restore(snaps) {
-      for (let i = 0; i < snaps.length; i += 400) {
-        const batch = fs.writeBatch(db);
-        snaps.slice(i, i + 400).forEach(({ col, id, data }) => (data ? batch.set(docRef(col, id), data) : batch.delete(docRef(col, id))));
-        await settle(batch.commit());
-      }
-    },
+    /** Write docs back exactly (data null = delete, into the recycle bin). Used for delete-employee and undo. */
+    restore: (snaps) => write(snaps.map(({ col, id, data }) => (data ? { op: 'set', col, id, data } : { op: 'delete', col, id }))),
     /** Before a rate change: write `rate` onto this employee's shifts that have none yet (shifts from her phone),
      *  so past work keeps the rate it was done at. Asks the server, not this device's copy, so no shift from a month
      *  that was never opened here is missed; with no connection it throws (code 'unavailable') and nothing changes. */
@@ -204,7 +192,7 @@ async function createFirebaseStore() {
     },
     addPayment: (data) => add('payments', { ...data, createdAt: Date.now() }),
     updatePayment: (id, data) => settle(fs.updateDoc(docRef('payments', id), data)),
-    deletePayment: (id) => settle(fs.deleteDoc(docRef('payments', id))),
+    deletePayment: (id) => write([{ op: 'delete', col: 'payments', id }]),
 
     /* ---------- employee phones (same as the Mac: FirestoreStore.swift) ---------- */
     /** Shifts running right now (clocked in from a phone), in any month. */
