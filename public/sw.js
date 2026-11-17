@@ -2,7 +2,7 @@
 // The data itself is kept by Firestore's own offline cache; this only makes sure the app can start.
 //   - our files: network first (deploys show up at once), the saved copy when there's no network
 //   - Firebase SDK, fonts, Excel library: versioned URLs, so the saved copy is used first
-const CACHE = 'shaon-v6'; // bump when app files change together, so a device never mixes old and new files
+const CACHE = 'shaon-v7'; // bump when app files change together, so a device never mixes old and new files
 const SDK = 'https://www.gstatic.com/firebasejs/12.19.0';
 const SHELL = [
   './', 'app.js', 'data.js', 'pay.js', 'phone.js', 'trash.js', 'restore.js', 'reorder.js', 'firebase-config.js', 'styles.css', 'manifest.webmanifest',

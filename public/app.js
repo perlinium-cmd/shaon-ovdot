@@ -1058,11 +1058,24 @@ const EmployeeView = {
   setTime(k, t) {
     this.ampmManual ||= {};
     if (!t) this.ampmManual[k] = false;
+    if (k === 'out') this.outAuto = false;
     this.form[k] = t || '';
     if (t) this.ampm[k] = +t.slice(0, 2) < 12 ? 'AM' : 'PM';
     this.input(k).value = this.displayValue(t);
     this.syncAmpm(k);
+    if (k === 'in') this.reAutoOut();
     this.afterTimeChange();
+  },
+  /** AM/PM for a typed/wheel "out" hour (1–12): whichever makes the shift shorter after clock-in. */
+  reAutoOut() {
+    if (!is12() || !this.outAuto || !this.form.in || !this.form.out || this.ampmManual?.out) return;
+    const [h, m] = this.form.out.split(':').map(Number);
+    const dur = (t) => wallMinutes(this.form.in, t) || 24 * 60; // same time as clock-in = not a shift
+    const best = ['AM', 'PM'].map((ap) => ({ ap, t: `${pad((h % 12) + (ap === 'PM' ? 12 : 0))}:${pad(m)}` }))
+      .sort((x, y) => dur(x.t) - dur(y.t))[0];
+    if (best.t === this.form.out) return;
+    this.ampm.out = best.ap; this.form.out = best.t;
+    this.input('out').value = this.displayValue(best.t); this.syncAmpm('out');
   },
   onTyped(k) {
     const inp = this.input(k);
@@ -1074,15 +1087,20 @@ const EmployeeView = {
       const typedH = +(d.length <= 2 ? d : d.slice(0, -2));
       if (typedH === 0 || typedH > 12) { // typed a 24h hour → reflect it on the AM/PM button
         this.ampm[k] = +v.slice(0, 2) < 12 ? 'AM' : 'PM'; this.syncAmpm(k);
-      } else if (k === 'out' && this.form.in && !this.ampmManual?.out) {
-        // pick AM/PM so the shift is the shortest one after clock-in (9:00 AM → "11" = 11:00 AM)
-        const opts = ['AM', 'PM'].map((ap) => ({ ap, t: parseTyped(d, ap) }));
-        const dur = (t) => wallMinutes(this.form.in, t) || 24 * 60; // same time as clock-in = not a shift
-        const best = opts.sort((x, y) => dur(x.t) - dur(y.t))[0];
-        this.ampm.out = best.ap; this.syncAmpm('out'); v = best.t;
+        if (k === 'out') this.outAuto = false;
+      } else if (k === 'out' && !this.ampmManual?.out) {
+        this.outAuto = true; // a later change of clock-in re-picks AM/PM too
+        if (this.form.in) {
+          // pick AM/PM so the shift is the shortest one after clock-in (9:00 AM → "11" = 11:00 AM)
+          const opts = ['AM', 'PM'].map((ap) => ({ ap, t: parseTyped(d, ap) }));
+          const dur = (t) => wallMinutes(this.form.in, t) || 24 * 60; // same time as clock-in = not a shift
+          const best = opts.sort((x, y) => dur(x.t) - dur(y.t))[0];
+          this.ampm.out = best.ap; this.syncAmpm('out'); v = best.t;
+        }
       }
     }
     this.form[k] = v || '';
+    if (k === 'in') this.reAutoOut();
     this.afterTimeChange();
     if (v && d.length === 4 && k === 'in' && !this.fOut.value) this.fOut.focus(); // jump to יציאה
   },
@@ -2156,6 +2174,15 @@ function openWheel(key, view) {
   ];
   if (twelve) cols.push({ id: 'ap', label: 'AM או PM', items: ['AM', 'PM'], idx: h < 12 ? 0 : 1 });
   const value = () => `${pad(cols[0].idx + (twelve && cols[2].idx === 1 ? 12 : 0))}:${pad(cols[1].idx)}`;
+  // Exit wheel in AM/PM mode: follow the hour/minute with whichever AM/PM gives the shorter shift, until the user picks AM/PM themselves.
+  let apTouched = false;
+  const autoAp = () => {
+    if (!twelve || key !== 'out' || !view.form.in || apTouched) return;
+    const h12 = cols[0].idx % 12;
+    const dur = (ap) => wallMinutes(view.form.in, `${pad(h12 + (ap ? 12 : 0))}:${pad(cols[1].idx)}`) || 24 * 60;
+    const ap = dur(1) < dur(0) ? 1 : 0;
+    if (cols[2].idx !== ap) { cols[2].idx = ap; wheels[2].scrollTo({ top: ap * ITEM_H, behavior: 'auto' }); }
+  };
 
   dlg.innerHTML = `
     <div class="grabber" aria-hidden="true"></div>
@@ -2196,7 +2223,7 @@ function openWheel(key, view) {
     const clamp = (i) => Math.max(0, Math.min(col.items.length - 1, i));
     w.addEventListener('scroll', () => {
       const i = clamp(Math.round(w.scrollTop / ITEM_H));
-      if (i !== col.idx) { col.idx = i; markAll(); tick(w); }
+      if (i !== col.idx) { col.idx = i; if (ci === 2) apTouched = true; else autoAp(); markAll(); tick(w); }
     }, { passive: true });
     w.addEventListener('click', (e) => {
       const it = e.target.closest('.wheel-item');
@@ -2212,6 +2239,7 @@ function openWheel(key, view) {
   $('#wheel-ok').addEventListener('click', ok);
   $('#wheel-cancel').addEventListener('click', () => dlg.close());
   dlg.showModal();
+  if (!view.form.out) autoAp();
   wheels.forEach((w, ci) => { w.scrollTop = cols[ci].idx * ITEM_H; });
   markAll();
   wheels[0].focus({ preventScroll: true });
