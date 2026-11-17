@@ -143,6 +143,8 @@ struct Payment: Codable, Identifiable, Equatable {
 struct AppSettings: Codable, Equatable {
     var defaultRate: Double?
     var timeFormat: String?   // "24" | "12"
+    var empOrder: [String]?   // personal order of the employee list (same fields as the website: public/reorder.js)
+    var empPinned: [String]?  // employees pinned to the top
     var is12: Bool { timeFormat == "12" }
 }
 
@@ -189,5 +191,65 @@ extension Payment {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(id: c.str(.id), empId: c.str(.empId), date: c.str(.date), amount: c.opt(Double.self, .amount) ?? 0,
                   method: c.str(.method), shiftIds: c.opt([String].self, .shiftIds), createdAt: c.opt(Double.self, .createdAt))
+    }
+}
+
+// MARK: personal order + pinning of the employee list (the same rules as public/reorder.js)
+
+struct EmpLayout: Equatable {
+    var pinned: [String]
+    var rest: [String]
+
+    /// Employees in the saved order, pinned first. New ones (not in `order` yet) go to the end of their group, by name.
+    init(_ emps: [Employee], order: [String]?, pinned: [String]?) {
+        let pos = Dictionary((order ?? []).enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let pin = Set(pinned ?? [])
+        let sorted = emps.sorted { a, b in
+            let ra = pos[a.id] ?? Int.max, rb = pos[b.id] ?? Int.max
+            if ra != rb { return ra < rb }
+            return a.name.localizedCompare(b.name) == .orderedAscending
+        }
+        self.pinned = sorted.filter { pin.contains($0.id) }.map(\.id)
+        self.rest = sorted.filter { !pin.contains($0.id) }.map(\.id)
+    }
+    init(pinned: [String], rest: [String]) { self.pinned = pinned; self.rest = rest }
+
+    /// Pin → end of the pinned group. Unpin → top of the others.
+    func togglingPin(_ id: String) -> EmpLayout {
+        let p = pinned.filter { $0 != id }, r = rest.filter { $0 != id }
+        return pinned.contains(id) ? EmpLayout(pinned: p, rest: [id] + r) : EmpLayout(pinned: p + [id], rest: r)
+    }
+
+    /// One step (-1 up / +1 down). Stepping over the line between the groups pins / unpins; the order stays.
+    func moving(_ id: String, by delta: Int) -> EmpLayout {
+        if let i = pinned.firstIndex(of: id) {
+            if delta > 0 && i == pinned.count - 1 { return EmpLayout(pinned: Array(pinned.dropLast()), rest: [id] + rest) }
+            let j = i + delta
+            guard pinned.indices.contains(j) else { return self }
+            var p = pinned; p.swapAt(i, j)
+            return EmpLayout(pinned: p, rest: rest)
+        }
+        guard let i = rest.firstIndex(of: id) else { return self }
+        if delta < 0 && i == 0 && !pinned.isEmpty { return EmpLayout(pinned: pinned + [id], rest: Array(rest.dropFirst())) }
+        let j = i + delta
+        guard rest.indices.contains(j) else { return self }
+        var r = rest; r.swapAt(i, j)
+        return EmpLayout(pinned: pinned, rest: r)
+    }
+
+    /// Drag & drop inside one group (SwiftUI `onMove` semantics).
+    func moved(pinnedGroup: Bool, from: IndexSet, to: Int) -> EmpLayout {
+        var list = pinnedGroup ? pinned : rest
+        let moving = from.sorted().map { list[$0] }
+        let before = from.filter { $0 < to }.count
+        for i in from.sorted(by: >) { list.remove(at: i) }
+        list.insert(contentsOf: moving, at: to - before)
+        return pinnedGroup ? EmpLayout(pinned: list, rest: rest) : EmpLayout(pinned: pinned, rest: list)
+    }
+
+    /// What to save. Saved ids that are not on screen right now keep their place at the end.
+    func settingsValues(previousOrder: [String]?) -> (order: [String], pinned: [String]) {
+        let shown = pinned + rest, seen = Set(shown)
+        return (shown + (previousOrder ?? []).filter { !seen.contains($0) }, pinned)
     }
 }

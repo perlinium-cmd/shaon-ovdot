@@ -102,3 +102,33 @@ final class PayTests: XCTestCase {
         XCTAssertEqual(fmtTime("00:05", twelve: true), "12:05 AM")
     }
 }
+
+
+final class EmpLayoutTests: XCTestCase {
+    func emps(_ ids: String...) -> [Employee] { ids.map { Employee(id: $0, name: $0, rate: nil, active: true, createdAt: nil) } }
+
+    func testOrderPinnedAndNewEmployees() {
+        let l = EmpLayout(emps("a", "b", "c", "d"), order: ["x", "c", "b"], pinned: ["b", "x"])
+        XCTAssertEqual(l.pinned, ["b"])
+        XCTAssertEqual(l.rest, ["c", "a", "d"])
+    }
+    func testTogglePinAndMoves() {
+        let l = EmpLayout(pinned: ["a", "b"], rest: ["c", "d"])
+        XCTAssertEqual(l.togglingPin("c"), EmpLayout(pinned: ["a", "b", "c"], rest: ["d"]))
+        XCTAssertEqual(l.togglingPin("a"), EmpLayout(pinned: ["b"], rest: ["a", "c", "d"]))
+        XCTAssertEqual(l.moving("c", by: -1), EmpLayout(pinned: ["a", "b", "c"], rest: ["d"]))
+        XCTAssertEqual(l.moving("b", by: 1), EmpLayout(pinned: ["a"], rest: ["b", "c", "d"]))
+        XCTAssertEqual(l.moving("a", by: -1), l)
+        XCTAssertEqual(l.moving("d", by: 1), l)
+    }
+    func testDragMove() {
+        let l = EmpLayout(pinned: [], rest: ["a", "b", "c", "d"])
+        XCTAssertEqual(l.moved(pinnedGroup: false, from: IndexSet(integer: 0), to: 3).rest, ["b", "c", "a", "d"])
+        XCTAssertEqual(l.moved(pinnedGroup: false, from: IndexSet(integer: 3), to: 1).rest, ["a", "d", "b", "c"])
+    }
+    func testSettingsKeepUnseenIds() {
+        let v = EmpLayout(pinned: ["b"], rest: ["a"]).settingsValues(previousOrder: ["z", "a", "b"])
+        XCTAssertEqual(v.order, ["b", "a", "z"])
+        XCTAssertEqual(v.pinned, ["b"])
+    }
+}

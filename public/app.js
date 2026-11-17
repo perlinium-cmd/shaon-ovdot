@@ -1,4 +1,5 @@
 import { createStore } from './data.js';
+import { orderEmployees, togglePin, moveFlat, layoutToSettings, enableDragSort } from './reorder.js';
 import {
   round2, toAgorot, shiftMinutes, wallMinutes, isOvernight, specialMinutes, shiftPayAgorot, aggregate, emptyAgg, unpaidOf,
   effRate as rateOf, shiftRate as rateOfShift, parseAmount, parseTyped,
@@ -635,8 +636,10 @@ const isLoaded = () => state.settings && state.employees && state.shifts;
 /* ---------- Home: employee cards ---------- */
 const HomeView = {
   mount(el) { this.el = el; this.update(); },
+  unmount() { this.stopDrag?.(); this.stopDrag = null; this.dragging = false; this.dirty = false; },
   update() {
     const el = this.el;
+    if (this.dragging) { this.dirty = true; return; } // a card is being held: redraw when it is let go
     if (!isLoaded()) { el.innerHTML = loadingHTML; return; }
 
     // Step 1 of onboarding: default rate
@@ -694,15 +697,54 @@ const HomeView = {
     const many = visible.length >= 5;
     const hadFocus = document.activeElement?.id === 'emp-search';
     this.q ??= '';
-    this.sort ??= lsGet('empSort') || 'name';
-    let shown = visible;
-    if (many) {
-      const q = this.q.trim();
-      if (q) shown = shown.filter((e) => e.name.includes(q));
-      const A = (e) => agg.get(e.id) || emptyAgg();
-      if (this.sort === 'hours') shown = [...shown].sort((x, y) => A(y).minutes - A(x).minutes || byName(x, y));
-      if (this.sort === 'unpaid') shown = [...shown].sort((x, y) => unpaidOf(A(y)) - unpaidOf(A(x)) || byName(x, y));
-    }
+    this.sort ??= lsGet('empSort') || 'manual';
+    const sort = many ? this.sort : 'manual';
+    const q = many ? this.q.trim() : '';
+    const A = (e) => agg.get(e.id) || emptyAgg();
+    const sorters = {
+      hours: (x, y) => A(y).minutes - A(x).minutes || byName(x, y),
+      unpaid: (x, y) => unpaidOf(A(y)) - unpaidOf(A(x)) || byName(x, y),
+      name: byName,
+    };
+    // Pinned employees are always on top; inside each group: the personal order, or the chosen sort.
+    const layout = orderEmployees(visible, state.settings.empOrder, state.settings.empPinned, byName);
+    this.layout = layout;
+    const byId = new Map(visible.map((e) => [e.id, e]));
+    const group = (ids) => {
+      let list = ids.map((id) => byId.get(id)).filter(Boolean);
+      if (q) list = list.filter((e) => e.name.includes(q));
+      if (sorters[sort]) list = [...list].sort(sorters[sort]);
+      return list;
+    };
+    const pinnedList = group(layout.pinned);
+    const restList = group(layout.rest);
+    this.canDrag = sort === 'manual' && !q && visible.length > 1;
+
+    const card = (e) => {
+      const a = A(e);
+      const pinned = layout.pinned.includes(e.id);
+      return `
+      <div class="emp-item${pinned ? ' is-pinned' : ''}${this.canDrag ? ' sortable' : ''}" data-id="${e.id}">
+        <a class="card emp-card" href="#/e/${e.id}" draggable="false" aria-label="${esc(e.name)}: ${fmtHM(a.minutes)} שעות, ${fmtMoney(a.pay)}">
+          <div class="emp-card-top">
+            ${avatar(e)}
+            <div style="min-width:0">
+              <div class="emp-card-name">${esc(e.name)}</div>
+              <div class="emp-card-sub">${e.active === false ? 'בארכיון · ' : ''}${a.shifts.length ? `${a.shifts.length} משמרות` : 'אין משמרות החודש'} · ${fmtMoney(effRate(e))}/שעה</div>
+            </div>
+          </div>
+          <div class="emp-card-stats">
+            <div class="stat"><div class="stat-label">שעות</div><div class="stat-value num">${fmtHM(a.minutes)}</div></div>
+            <div class="stat"><div class="stat-label">${allPaid(a) ? 'תשלום' : a.paidA > 0 ? 'נותר לתשלום' : 'לתשלום'}</div>
+              <div class="stat-value num">${allPaid(a) ? '<span class="paid-ok">שולם ✓</span>' : fmtMoney(unpaidOf(a))}</div></div>
+          </div>
+        </a>
+        <div class="emp-tools">
+          <button type="button" class="tool pin-btn" aria-pressed="${pinned}" aria-label="${pinned ? 'ביטול נעיצה' : 'נעיצה בראש הרשימה'}: ${esc(e.name)}" title="${pinned ? 'ביטול נעיצה' : 'נעיצה בראש הרשימה'}">${icon('pin')}</button>
+          ${this.canDrag ? `<button type="button" class="tool grip" aria-label="שינוי סדר: ${esc(e.name)} (חיצים למעלה ולמטה)" title="גרירה לשינוי סדר">${icon('grip')}</button>` : ''}
+        </div>
+      </div>`;
+    };
 
     el.innerHTML = `
       <div class="page-head">
@@ -716,34 +758,26 @@ const HomeView = {
           <input type="search" id="emp-search" class="input" placeholder="חיפוש עובדת…" value="${esc(this.q)}" autocomplete="off"></label>
         <label class="sort"><span class="sr-only">מיון</span>
           <select id="emp-sort" class="input">
-            <option value="name" ${this.sort === 'name' ? 'selected' : ''}>לפי שם</option>
-            <option value="hours" ${this.sort === 'hours' ? 'selected' : ''}>הכי הרבה שעות</option>
-            <option value="unpaid" ${this.sort === 'unpaid' ? 'selected' : ''}>הכי הרבה לתשלום</option>
+            <option value="manual" ${sort === 'manual' ? 'selected' : ''}>סדר אישי (גרירה)</option>
+            <option value="name" ${sort === 'name' ? 'selected' : ''}>לפי שם</option>
+            <option value="hours" ${sort === 'hours' ? 'selected' : ''}>הכי הרבה שעות</option>
+            <option value="unpaid" ${sort === 'unpaid' ? 'selected' : ''}>הכי הרבה לתשלום</option>
           </select></label>
       </div>` : ''}
-      ${many && !shown.length ? `<p class="muted empty">לא נמצאה עובדת בשם "${esc(this.q.trim())}"</p>` : ''}
-      <div class="emp-grid">
-        ${shown.map((e) => {
-          const a = agg.get(e.id) || emptyAgg();
-          return `
-          <a class="card emp-card" href="#/e/${e.id}" aria-label="${esc(e.name)}: ${fmtHM(a.minutes)} שעות, ${fmtMoney(a.pay)}">
-            <div class="emp-card-top">
-              ${avatar(e)}
-              <div style="min-width:0">
-                <div class="emp-card-name">${esc(e.name)}</div>
-                <div class="emp-card-sub">${e.active === false ? 'בארכיון · ' : ''}${a.shifts.length ? `${a.shifts.length} משמרות` : 'אין משמרות החודש'} · ${fmtMoney(effRate(e))}/שעה</div>
-              </div>
-              <span class="go">${icon('chev-l')}</span>
-            </div>
-            <div class="emp-card-stats">
-              <div class="stat"><div class="stat-label">שעות</div><div class="stat-value num">${fmtHM(a.minutes)}</div></div>
-              <div class="stat"><div class="stat-label">${allPaid(a) ? 'תשלום' : a.paidA > 0 ? 'נותר לתשלום' : 'לתשלום'}</div>
-                <div class="stat-value num">${allPaid(a) ? '<span class="paid-ok">שולם ✓</span>' : fmtMoney(unpaidOf(a))}</div></div>
-            </div>
-          </a>`;
-        }).join('')}
-        <button class="add-card" id="add-emp" type="button">${icon('plus')}עובדת חדשה</button>
-      </div>`;
+      ${many && !pinnedList.length && !restList.length ? `<p class="muted empty">לא נמצאה עובדת בשם "${esc(q)}"</p>` : ''}
+      <div class="emp-sortroot" id="emp-root">
+        ${pinnedList.length ? `
+        <div class="zone-label">${icon('pin')}נעוצות</div>
+        <div class="emp-grid" data-zone="pinned">${pinnedList.map(card).join('')}</div>
+        ${restList.length || !q ? `<div class="zone-label">${pinnedList.length ? 'כל השאר' : ''}</div>` : ''}` : ''}
+        <div class="emp-grid" data-zone="rest">
+          ${restList.map(card).join('')}
+          <button class="add-card" id="add-emp" type="button">${icon('plus')}עובדת חדשה</button>
+        </div>
+      </div>
+      <p class="sr-only" id="emp-live" role="status" aria-live="polite"></p>
+      ${this.canDrag && visible.length > 1 ? `<p class="muted sort-hint">אפשר לגרור עובדת (במגע: ללחוץ ולהחזיק) כדי לשנות את הסדר, ולנעוץ עובדות בראש הרשימה.</p>` : ''}`;
+
     $('#add-emp').addEventListener('click', () => employeeSheet());
     const search = $('#emp-search');
     if (search) {
@@ -751,6 +785,49 @@ const HomeView = {
       if (hadFocus) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
       $('#emp-sort').addEventListener('change', (ev) => { this.sort = ev.target.value; lsSet('empSort', this.sort); this.update(); });
     }
+
+    const root = $('#emp-root');
+    root.addEventListener('click', (ev) => {
+      const b = ev.target.closest('.pin-btn');
+      if (!b) return;
+      const id = b.closest('.emp-item').dataset.id;
+      const was = layout.pinned.includes(id);
+      this.commit(togglePin(layout, id), `${empById(id)?.name || ''} ${was ? 'הוסרה מהנעוצות' : 'ננעצה בראש הרשימה'}`, id, '.pin-btn');
+    });
+    root.addEventListener('keydown', (ev) => {
+      const g = ev.target.closest?.('.grip');
+      if (!g || !this.canDrag) return;
+      // The list reads right-to-left: right / up = earlier, left / down = later.
+      const delta = { ArrowUp: -1, ArrowRight: -1, ArrowDown: 1, ArrowLeft: 1 }[ev.key];
+      if (!delta) return;
+      ev.preventDefault();
+      const id = g.closest('.emp-item').dataset.id;
+      const next = moveFlat(layout, id, delta);
+      if (next === layout) return;
+      const flat = [...next.pinned, ...next.rest];
+      this.commit(next, `${empById(id)?.name || ''}: מקום ${flat.indexOf(id) + 1} מתוך ${flat.length}${next.pinned.includes(id) ? ', נעוצה' : ''}`, id, '.grip');
+    });
+
+    this.stopDrag?.();
+    this.stopDrag = enableDragSort(root, {
+      enabled: () => this.canDrag,
+      onActive: (on) => {
+        this.dragging = on;
+        if (!on && this.dirty) { this.dirty = false; this.update(); }
+      },
+      onDrop: (lay) => this.commit(lay, 'הסדר נשמר'),
+      onRestore: () => this.update(),
+    });
+  },
+
+  /** Saves a new order / pinning (shown at once, saved in the background) and says what happened for screen readers. */
+  commit(lay, say, focusId, focusSel) {
+    const next = layoutToSettings(lay, state.settings.empOrder);
+    state.settings = { ...state.settings, ...next };
+    this.update();
+    const live = $('#emp-live'); if (live) live.textContent = say;
+    if (focusId) $(`.emp-item[data-id="${focusId}"] ${focusSel}`)?.focus();
+    Promise.resolve(state.store.saveSettings(next)).catch((err) => { fail(err); });
   },
 };
 
