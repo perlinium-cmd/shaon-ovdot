@@ -61,6 +61,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     if (url.pathname.startsWith('/__/')) return; // Firebase sign-in handler and config
+    if (url.pathname.startsWith('/android/')) return; // phone app download: never cached, never served as the app
     if (req.mode === 'navigate') { e.respondWith(networkFirst(req, './')); return; }
     e.respondWith(networkFirst(req, url.pathname === '/' ? './' : req));
     return;
