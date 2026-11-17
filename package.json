@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/pay.test.mjs tests/pay-props.test.mjs tests/phone.test.mjs",
+    "test": "node --test tests/pay.test.mjs tests/pay-props.test.mjs tests/phone.test.mjs tests/reorder.test.mjs",
     "test:rules": "npx -y firebase-tools@15 emulators:exec --only firestore --project demo-shaon \"node --test tests/rules.test.mjs\""
   },
   "devDependencies": {
