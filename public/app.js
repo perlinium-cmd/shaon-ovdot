@@ -1818,7 +1818,7 @@ const TrashView = {
     b.disabled = true; b.classList.add('is-loading');
     try {
       const refs = neededRefs(g);
-      const live = new Map((await state.store.snapshot(refs)).map((r) => [`${r.col}/${r.id}`, r.data]));
+      const live = new Map((await state.store.snapshot(refs, { fresh: true })).map((r) => [`${r.col}/${r.id}`, r.data]));
       const plan = restorePlan(g, { live, payA });
       if (plan.error) { toast(plan.error, { error: true }); b.disabled = false; b.classList.remove('is-loading'); return; }
       await state.store.commit(plan.ops);

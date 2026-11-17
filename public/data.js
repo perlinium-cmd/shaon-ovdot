@@ -61,7 +61,9 @@ async function createFirebaseStore() {
   const docRef = (...segs) => fs.doc(db, 'users', uid, ...segs);
   const colRef = (name) => fs.collection(db, 'users', uid, name);
   /** Every write that may delete goes through here: deleted employees/shifts/payments go to the recycle bin (trash.js). */
-  const write = (ops) => writeWithTrash({ fs, db, ref: docRef, read: getLocalFirst, commit: (b) => settle(b.commit()), by: uid, ops });
+  // The bin copy must be the record as the server has it now (the rules refuse anything else), so it is read from the
+  // server; getDoc falls back to this device's copy only when offline.
+  const write = (ops) => writeWithTrash({ fs, db, ref: docRef, read: fs.getDoc, commit: (b) => settle(b.commit()), by: uid, ops });
 
   /** One-time move of data saved before per-user spaces existed (root collections, owner-only). */
   async function migrateLegacy() {
@@ -162,9 +164,9 @@ async function createFirebaseStore() {
      *  [{op: set|update|delete, col, id, data}]). */
     commit: (ops) => write(ops),
     /** Current contents of the given docs ({col, id}) → [{col, id, data|null}]. */
-    snapshot(items) {
+    snapshot(items, { fresh = false } = {}) {   // fresh: from the server when online (a restore adds to sums)
       return Promise.all(items.map(async ({ col, id }) => {
-        const d = await getLocalFirst(docRef(col, id));
+        const d = await (fresh ? fs.getDoc : getLocalFirst)(docRef(col, id));
         return { col, id, data: d.exists() ? d.data() : null };
       }));
     },
