@@ -28,7 +28,9 @@ struct SummaryView: View {
                                     Avatar(name: e.name)
                                     VStack(alignment: .leading) {
                                         Text(e.name).fontWeight(.medium)
-                                        Text("\(a.shifts.count) משמרות · \(fmtHM(a.minutes)) שעות").font(.caption).foregroundStyle(.secondary)
+                                        let rates = Set(a.shifts.map { shiftRate($0, e, defaultRate: model.defaultRate) })
+                                        Text("\(a.shifts.count) משמרות · \(fmtHM(a.minutes)) שעות · " + (rates.count > 1 ? "תעריף משתנה" : "\(fmtMoney(rates.first ?? model.rate(for: e)))/שעה"))
+                                            .font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing) {
@@ -37,7 +39,7 @@ struct SummaryView: View {
                                             .font(.caption).foregroundStyle(a.allPaid ? .green : .secondary)
                                     }
                                 }.padding(.vertical, 8).padding(.horizontal, 12).contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(.plain).focusEffectDisabled()
                             Divider()
                         }
                         HStack { Text("סה״כ החודש").fontWeight(.semibold); Spacer(); Text(fmtMoney(tPay)).font(.title3.weight(.bold)).monospacedDigit() }.padding(12)
@@ -46,7 +48,17 @@ struct SummaryView: View {
                 }
             }.padding(20)
         }
-        .navigationTitle("סיכום \(fmtMonth(model.month))")
+        .navigationTitle("סיכום חודשי")
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    Button("ייצוא לאקסל…") { Exporter.excel(model) }
+                    Button("שמירה כ-PDF…") { Exporter.savePDF(model) }
+                    Button("הדפסה…") { Exporter.printReport(model) }
+                } label: { Label("ייצוא", systemImage: "square.and.arrow.up") }
+                .disabled(rows.allSatisfy { $0.1.shifts.isEmpty })
+            }
+        }
     }
     private func kpi(_ l: String, _ v: String) -> some View {
         VStack(alignment: .leading, spacing: 4) { Text(l).font(.caption).foregroundStyle(.secondary); Text(v).font(.title2.weight(.bold)).monospacedDigit() }

@@ -14,7 +14,10 @@ settings:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
-    from: "12.0.0"
+    from: "12.19.3"
+  Xlsx:
+    url: https://github.com/jmcnamara/libxlsxwriter
+    from: "1.2.0"
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "9.0.0"
@@ -31,6 +34,8 @@ targets:
         product: FirebaseFirestore
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: Xlsx
+        product: libxlsxwriter
     info:
       path: ShaonMac/Info.plist
       properties:

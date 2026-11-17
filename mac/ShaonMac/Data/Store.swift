@@ -32,6 +32,8 @@ protocol DataStore: AnyObject {
     var isDemo: Bool { get }
     /// Problems to show the user: a listener that failed, or a write the server refused after it was saved here.
     var onProblem: ((String) -> Void)? { get set }
+    /// The server refused to read this account's data (signed in with an account that has no access).
+    var onDenied: (() -> Void)? { get set }
     func watchSettings(_ cb: @escaping (AppSettings) -> Void) -> () -> Void
     func saveSettings(_ s: AppSettings) async throws
     func watchEmployees(_ cb: @escaping ([Employee]) -> Void) -> () -> Void
@@ -40,6 +42,8 @@ protocol DataStore: AnyObject {
     func deleteEmployee(_ id: String) async throws
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void
     func addShift(_ s: Shift) async throws -> String
+    /// All payment records of one employee (every month). Changed only through `commit`.
+    func watchPayments(empId: String, _ cb: @escaping ([Payment]) -> Void) -> () -> Void
 
     // Writes that must happen together (payments + the shifts they cover), and exact undo.
     func newId(_ col: String) -> String

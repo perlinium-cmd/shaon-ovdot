@@ -8,12 +8,33 @@ final class FirestoreStore: DataStore {
     private let db = Firestore.firestore()
     private let uid: String
     var onProblem: ((String) -> Void)?
+    var onDenied: (() -> Void)?
 
     init(uid: String) { self.uid = uid }
 
     private func col(_ n: String) -> CollectionReference { db.collection("users").document(uid).collection(n) }
     private func doc(_ n: String, _ id: String) -> DocumentReference { col(n).document(id) }
-    private func listenerFailed(_ e: Error) { print(e); onProblem?("בעיה בחיבור לנתונים") }
+    private func listenerFailed(_ e: Error) {
+        print(e)
+        let ns = e as NSError
+        if ns.domain == FirestoreErrorDomain && ns.code == FirestoreErrorCode.permissionDenied.rawValue { onDenied?(); return }
+        onProblem?("בעיה בחיבור לנתונים")
+    }
+
+    /// Firestore first answers from this Mac's copy, which right after sign-in may be empty. Showing that would flash
+    /// "add your first employee" before the real data arrives, so an empty first answer from the copy is held back
+    /// until the server answers (or 4 seconds pass, e.g. without internet). Everything after that passes as it comes.
+    @MainActor private final class FirstAnswerGate {
+        private var passed = false
+        func pass(fromCache: Bool, empty: Bool, _ emit: @escaping () -> Void) {
+            if !passed && fromCache && empty {
+                Task { @MainActor in try? await Task.sleep(for: .seconds(4)); if !self.passed { self.passed = true; emit() } }
+                return
+            }
+            passed = true
+            emit()
+        }
+    }
 
     // MARK: writes that never hang offline
     // Firestore keeps a write on this Mac at once (in its on-disk cache, so it survives quitting) and sends it when it
@@ -54,10 +75,13 @@ final class FirestoreStore: DataStore {
 
     // MARK: settings
     func watchSettings(_ cb: @escaping (AppSettings) -> Void) -> () -> Void {
-        let l = doc("settings", "main").addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = doc("settings", "main").addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            let d = snap?.data() ?? [:]
-            cb(self?.decode(AppSettings.self, id: "main", d) ?? AppSettings())
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: !snap.exists) {
+                cb(self?.decode(AppSettings.self, id: "main", snap.data() ?? [:]) ?? AppSettings())
+            }
         }
         return { l.remove() }
     }
@@ -68,9 +92,13 @@ final class FirestoreStore: DataStore {
 
     // MARK: employees
     func watchEmployees(_ cb: @escaping ([Employee]) -> Void) -> () -> Void {
-        let l = col("employees").addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = col("employees").addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            cb((snap?.documents ?? []).compactMap { self?.decode(Employee.self, id: $0.documentID, $0.data()) })
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: snap.isEmpty) {
+                cb(snap.documents.compactMap { self?.decode(Employee.self, id: $0.documentID, $0.data()) })
+            }
         }
         return { l.remove() }
     }
@@ -96,9 +124,20 @@ final class FirestoreStore: DataStore {
 
     // MARK: shifts
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void {
-        let l = col("shifts").whereField("month", isEqualTo: month).addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = col("shifts").whereField("month", isEqualTo: month).addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            cb((snap?.documents ?? []).compactMap { self?.decode(Shift.self, id: $0.documentID, $0.data()) })
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: snap.isEmpty) {
+                cb(snap.documents.compactMap { self?.decode(Shift.self, id: $0.documentID, $0.data()) })
+            }
+        }
+        return { l.remove() }
+    }
+    func watchPayments(empId: String, _ cb: @escaping ([Payment]) -> Void) -> () -> Void {
+        let l = col("payments").whereField("empId", isEqualTo: empId).addSnapshotListener { [weak self] snap, err in
+            if let err { self?.listenerFailed(err); return }
+            cb((snap?.documents ?? []).compactMap { self?.decode(Payment.self, id: $0.documentID, $0.data()) })
         }
         return { l.remove() }
     }

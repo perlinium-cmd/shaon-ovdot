@@ -5,6 +5,7 @@ import Foundation
 final class DemoStore: DataStore {
     let isDemo = true
     var onProblem: ((String) -> Void)?
+    var onDenied: (() -> Void)?
     /// Tests: makes shiftsWithoutRate fail like the real store does without internet.
     var offline = false
     private var settings = AppSettings(defaultRate: 40, timeFormat: "24")
@@ -114,6 +115,9 @@ final class DemoStore: DataStore {
         return shifts.values.filter { $0.empId == empId && $0.rate == nil }
     }
     func setRates(_ rates: [String: Double]) async throws { for (id, r) in rates { shifts[id]?.rate = r }; notify() }
+    func watchPayments(empId: String, _ cb: @escaping ([Payment]) -> Void) -> () -> Void {
+        watch { [weak self] in if let s = self { cb(s.payments.values.filter { $0.empId == empId }) } }
+    }
 
     func watchOpenShifts(_ cb: @escaping ([Shift]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(s.shifts.values.filter(\.isOpen)) } } }
     func watchDevices(_ cb: @escaping ([Device]) -> Void) -> () -> Void { watch { [weak self] in if let s = self { cb(Array(s.devices.values)) } } }
