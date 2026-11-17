@@ -84,6 +84,15 @@ final class PayTests: XCTestCase {
         XCTAssertEqual(parseTyped("13", ampm: "AM"), "13:00")   // 24h hour wins
     }
 
+    func testBestAmpmPicksShorterShift() {
+        XCTAssertEqual(bestAmpm(start: "08:00", hour: 4, minute: 0), "PM")    // 8h, not 20h
+        XCTAssertEqual(bestAmpm(start: "08:00", hour: 11, minute: 0), "AM")   // 3h, not 15h
+        XCTAssertEqual(bestAmpm(start: "22:00", hour: 6, minute: 0), "AM")    // overnight 8h, not 20h
+        XCTAssertEqual(bestAmpm(start: "09:00", hour: 9, minute: 0), "PM")    // same time as clock-in is not a shift
+        XCTAssertEqual(bestAmpm(start: "12:00", hour: 12, minute: 0), "AM")   // 12:00 → 12:00 PM is 0h → AM (12h)
+        XCTAssertEqual(bestAmpm(start: "14:30", hour: 10, minute: 0), "PM")   // 7.5h
+    }
+
     func testParseRateAndFormats() {
         XCTAssertEqual(parseRate("42,5"), 42.5)
         XCTAssertNil(parseRate(" "))

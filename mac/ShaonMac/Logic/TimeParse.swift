@@ -43,3 +43,13 @@ func fmtTime(_ t: String, twelve: Bool) -> String {
     let h = m / 60
     return "\(h % 12 == 0 ? 12 : h % 12):" + String(format: "%02d", m % 60) + (h < 12 ? " AM" : " PM")
 }
+
+/// For an exit time whose AM/PM is ambiguous (hour 1–12): whichever gives the shorter shift after `start` (by the
+/// clock on the wall). Same rule as the website. "Same time as clock-in" is not a shift, so it counts as 24h.
+func bestAmpm(start: String, hour: Int, minute: Int) -> String {
+    func dur(_ pm: Bool) -> Int {
+        wallMinutes(start, String(format: "%02d:%02d", hour % 12 + (pm ? 12 : 0), minute)).nonZero ?? 24 * 60
+    }
+    return dur(true) < dur(false) ? "PM" : "AM"
+}
+private extension Int { var nonZero: Int? { self == 0 ? nil : self } }

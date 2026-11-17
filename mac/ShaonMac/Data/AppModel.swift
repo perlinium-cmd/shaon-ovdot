@@ -10,6 +10,8 @@ final class AppModel {
     var shifts: [Shift]?
     var month = currentMonth() { didSet { if month != oldValue { subscribeShifts() } } }
     var toast: String?
+    /// Signed in with an account the server doesn't let read this data.
+    var denied = false
     var openShifts: [Shift] = []
     var devices: [Device] = []
     var requests: [ShiftRequest] = []
@@ -30,6 +32,7 @@ final class AppModel {
         self.store = store
         if !store.isDemo { notifiedNotices = Set(UserDefaults.standard.stringArray(forKey: "notifiedNotices") ?? []) }
         store.onProblem = { [weak self] msg in self?.say(msg, long: true) }
+        store.onDenied = { [weak self] in self?.denied = true }
         unsubs.append(store.watchSettings { [weak self] in self?.settings = $0 })
         unsubs.append(store.watchEmployees { [weak self] in self?.employees = $0.sorted { $0.name.localizedCompare($1.name) == .orderedAscending } })
         subscribeShifts()
@@ -292,6 +295,8 @@ final class AppModel {
     }
 
     // MARK: payments (the same records as the website: users/{uid}/payments)
+    /// Same choices as the website (PAY_METHODS in public/app.js).
+    static let payMethods = ["מזומן", "העברה בנקאית", "ביט", "פייבוקס", "צ׳ק", "אחר"]
     /// Last way of paying chosen on this Mac (the website keeps its own).
     var payMethod: String {
         get { UserDefaults.standard.string(forKey: "payMethod") ?? "מזומן" }
@@ -343,6 +348,27 @@ final class AppModel {
         } catch { fail(error) }
     }
 
+    /// Changes how and when a payment was made (never its amount or shifts). Same as the website's payment sheet.
+    func updatePayment(_ p: Payment, method: String, date: String) async {
+        do {
+            try await commitUndoable("עדכון תשלום", refs: [("payments", p.id)], [.update("payments", p.id, ["method": method, "date": date])])
+            say("התשלום עודכן")
+        } catch { fail(error) }
+    }
+
+    /// Deletes a payment record; its shifts (in any month) lose their "paid" mark — in one write. Only shifts that still
+    /// exist and still belong to this payment change. Same as the website's payment sheet.
+    func deletePayment(_ p: Payment) async {
+        let shiftRefs = (p.shiftIds ?? []).map { (col: "shifts", id: $0) }
+        do {
+            let mine = try await store.snapshot(shiftRefs).filter { $0.data != nil && $0.data?["paymentId"] as? String == p.id }
+            try await commitUndoable("מחיקת תשלום", refs: [("payments", p.id)] + shiftRefs,
+                                     mine.map { .update("shifts", $0.id, ["paid": false, "paidAt": NSNull(), "paymentId": NSNull()]) }
+                                     + [.delete("payments", p.id)])
+            say("התשלום נמחק")
+        } catch { fail(error) }
+    }
+
     /// The writes that take paid shifts out of their payment records: the shift leaves `shiftIds` and its pay leaves
     /// `amount` (exact, in agorot); a record left with no shift is deleted.
     private func paymentChanges(removing paid: [Shift]) async throws -> ([DocWrite], [(col: String, id: String)]) {
@@ -385,6 +411,15 @@ final class AppModel {
             for s in try await store.shiftsWithoutRate(empId: id) { rates[s.id] = rateFor(id) }
         }
         if !rates.isEmpty { try await store.setRates(rates) }
+    }
+    /// "Update this month's shifts too" after a rate change: sets `rate` on the given shifts that are still unpaid
+    /// (what was paid stays what it was), in one write with ⌘Z. Same as the website.
+    func applyRate(_ rate: Double, to list: [Shift]) async {
+        let todo = list.filter { !$0.isPaid }
+        guard !todo.isEmpty else { return }
+        do {
+            try await commitUndoable("עדכון תעריף", refs: todo.map { ("shifts", $0.id) }, todo.map { .update("shifts", $0.id, ["rate": rate]) })
+        } catch { fail(error) }
     }
     @discardableResult
     func deleteEmployee(_ e: Employee) async -> Bool {

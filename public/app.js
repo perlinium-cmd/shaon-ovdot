@@ -7,6 +7,7 @@ import {
 import {
   pendingRequests, decidedRequests, unseenNotices, sortNotices, describeNotice, runningMinutes, RequestError,
 } from './phone.js';
+import { trashGroups, neededRefs, restorePlan } from './restore.js';
 
 /* =========================================================
    Helpers
@@ -1690,6 +1691,11 @@ const SettingsView = {
         <section class="card" id="phones"></section>
         <section class="card" id="archived"></section>
         <section class="card">
+          <h2>סל מחזור</h2>
+          <p class="muted" style="font-size:14px">עובדות, משמרות ותשלומים שנמחקו נשמרים כאן, ואפשר להחזיר אותם.</p>
+          <a class="btn btn-secondary" href="#/trash">${icon('trash')}פתיחת סל המחזור</a>
+        </section>
+        <section class="card">
           <h2>חשבון</h2>
           <div class="row-between">
             <span class="muted" dir="ltr" style="overflow:hidden;text-overflow:ellipsis">${esc(state.user?.email || '')}</span>
@@ -1828,6 +1834,74 @@ const SettingsView = {
         fail(e); b.disabled = false; b.classList.remove('is-loading');
       }
     }));
+  },
+};
+
+/* ---------- Recycle bin: what was deleted, and the way back (restore.js decides what to write) ---------- */
+const TrashView = {
+  mount(el) {
+    this.el = el;
+    this.groups = null;
+    this.render();
+    this.load();
+  },
+  unmount() { this.el = null; },
+  update() {},
+  async load() {
+    try {
+      const { items, live } = await state.store.listTrash();
+      this.groups = trashGroups(items, live);
+    } catch (e) { fail(e); this.groups = []; }
+    if (mounted.view === this) this.render();
+  },
+  label(g) {
+    const d = g.item.data;
+    const name = g.kind === 'employee' ? d.name : (empById(d.empId)?.name || 'עובדת שנמחקה');
+    const shifts = g.members.filter((m) => m.col === 'shifts').length;
+    const pays = g.members.filter((m) => m.col === 'payments').length;
+    if (g.kind === 'employee') {
+      const parts = [shifts && nShifts(shifts), pays && (pays === 1 ? 'תשלום אחד' : `${pays} תשלומים`)].filter(Boolean);
+      return { title: `${esc(name)} (עובדת)`, sub: parts.length ? `כולל ${parts.join(' ו')}` : '' };
+    }
+    if (g.kind === 'shift') {
+      const time = d.out ? `${fmtTime(d.in)}–${fmtTime(d.out)}` : fmtTime(d.in);
+      return { title: `משמרת של ${esc(name)} · ${esc(dayLabel(d.date))}`, sub: `${time}${d.paid ? ' · שולמה' : ''}${pays ? ' · כולל רשומת התשלום' : ''}` };
+    }
+    return { title: `תשלום ל${esc(name)} · ${fmtMoney(d.amount)}`, sub: `${esc(fmtDate(d.date))} · ${esc(d.method || '')} · ${nShifts(d.shiftIds?.length || 0)}` };
+  },
+  render() {
+    if (!this.el) return;
+    const head = `<div class="page-head"><h1>סל מחזור</h1></div>`;
+    if (!this.groups) { this.el.innerHTML = head + loadingHTML; return; }
+    if (!this.groups.length) {
+      this.el.innerHTML = `${head}<div class="empty"><p class="muted">הסל ריק. כל עובדת, משמרת או תשלום שיימחקו יחכו כאן.</p></div>`;
+      return;
+    }
+    this.el.innerHTML = `${head}
+      <div class="settings">
+        <section class="card">
+          <p class="muted" style="font-size:14px">שחזור מחזיר את הרשומה בדיוק כמו שהייתה לפני המחיקה. עובדת חוזרת עם המשמרות והתשלומים שנמחקו איתה.</p>
+          <ul class="archived-list">${this.groups.map((g, i) => {
+            const { title, sub } = this.label(g);
+            return `<li><span class="name">${title}<br><span class="muted" style="font-size:14px">${sub ? `${sub} · ` : ''}נמחק ${esc(whenLabel(g.item.deletedAt))}</span></span>
+              <button class="btn btn-ghost" type="button" data-i="${i}">שחזור</button></li>`;
+          }).join('')}</ul>
+        </section>
+      </div>`;
+    this.el.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => this.restore(this.groups[+b.dataset.i], b)));
+  },
+  async restore(g, b) {
+    if (b.disabled) return;
+    b.disabled = true; b.classList.add('is-loading');
+    try {
+      const refs = neededRefs(g);
+      const live = new Map((await state.store.snapshot(refs, { fresh: true })).map((r) => [`${r.col}/${r.id}`, r.data]));
+      const plan = restorePlan(g, { live, payA });
+      if (plan.error) { toast(plan.error, { error: true }); b.disabled = false; b.classList.remove('is-loading'); return; }
+      await state.store.commit(plan.ops);
+      toast(plan.note || 'שוחזר');
+      await this.load();
+    } catch (e) { fail(e); b.disabled = false; b.classList.remove('is-loading'); }
   },
 };
 
@@ -2234,9 +2308,10 @@ function parseRoute() {
   if (name === 'summary') return { name: 'summary', nav: 'summary' };
   if (name === 'settings') return { name: 'settings', nav: 'settings' };
   if (name === 'requests') return { name: 'requests', nav: 'requests' };
+  if (name === 'trash') return { name: 'trash', nav: 'settings' };
   return { name: 'home', nav: 'home' };
 }
-const VIEWS = { home: HomeView, employee: EmployeeView, report: ReportView, summary: SummaryView, settings: SettingsView, requests: RequestsView };
+const VIEWS = { home: HomeView, employee: EmployeeView, report: ReportView, summary: SummaryView, settings: SettingsView, requests: RequestsView, trash: TrashView };
 
 function route() {
   const r = parseRoute();
@@ -2244,7 +2319,7 @@ function route() {
   document.querySelectorAll('[data-nav]').forEach((a) => {
     if (a.dataset.nav === r.nav) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  $('.month-switch').hidden = r.name === 'settings' || r.name === 'requests' || (r.name === 'summary' && SummaryView.mode !== 'month');
+  $('.month-switch').hidden = r.name === 'settings' || r.name === 'requests' || r.name === 'trash' || (r.name === 'summary' && SummaryView.mode !== 'month');
   if (mounted.key === key) { mounted.view.update(); return; }
   mounted.view?.unmount?.();
   const view = VIEWS[r.name];

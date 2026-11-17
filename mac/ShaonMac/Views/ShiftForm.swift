@@ -16,10 +16,15 @@ struct ShiftForm: View {
     @State private var error: String?
     @State private var loaded = false
     @State private var saving = false   // one save at a time: a second click never adds the shift twice
+    @State private var focusIn = false
+    @State private var focusOut = false
 
     private var dateS: String { dateStr(date) }
+    /// Last hours used for this employee: newest shift this month, else remembered from before.
     private var last: (String, String)? {
-        model.shifts(of: emp.id).first(where: { $0.id != shift?.id }).map { ($0.in, $0.out) }
+        if let s = model.shifts(of: emp.id).first(where: { $0.id != shift?.id && !$0.isOpen && !$0.out.isEmpty }) { return (s.in, s.out) }
+        let saved = (UserDefaults.standard.string(forKey: "last-\(emp.id)") ?? "").split(separator: "-").map(String.init)
+        return saved.count == 2 ? (saved[0], saved[1]) : nil
     }
     private var draft: Shift? {
         guard !tin.isEmpty, !tout.isEmpty, tin != tout else { return nil }
@@ -34,14 +39,17 @@ struct ShiftForm: View {
     var body: some View {
         Form {
             Section {
+                Picker("תצוגת שעה", selection: Binding(get: { model.twelve ? "12" : "24" }, set: { v in Task { await model.saveSettings { $0.timeFormat = v } } })) {
+                    Text("24h").tag("24"); Text("AM/PM").tag("12")
+                }.pickerStyle(.segmented).frame(width: 150)
                 HStack {
                     DatePicker("תאריך", selection: $date, displayedComponents: .date).labelsHidden()
                     Button("היום") { date = .now }.controlSize(.small)
                     Button("אתמול") { date = gregorian.date(byAdding: .day, value: -1, to: .now)! }.controlSize(.small)
                 }
                 HStack(alignment: .bottom, spacing: 16) {
-                    TimeField(label: "כניסה", value: $tin)
-                    TimeField(label: "יציאה", value: $tout)
+                    TimeField(label: "כניסה", value: $tin, focusRequest: $focusIn, onFilled: { if tout.isEmpty { focusOut = true } })
+                    TimeField(label: "יציאה", value: $tout, focusRequest: $focusOut, pairedStart: tin)
                     if shift == nil, let last, !(tin == last.0 && tout == last.1) {
                         Button { tin = last.0; tout = last.1 } label: { Label("כמו בפעם הקודמת: \(model.fmt(last.0))–\(model.fmt(last.1))", systemImage: "repeat") }
                             .controlSize(.small)
@@ -82,7 +90,10 @@ struct ShiftForm: View {
             if let error { Text(error).foregroundStyle(.red).font(.callout) }
             HStack {
                 Spacer()
-                if shift != nil { Button("ביטול", role: .cancel, action: onDone) }
+                if let s = shift {
+                    Button("מחיקה", role: .destructive) { Task { await model.deleteShifts([s.id]); onDone() } }
+                    Button("ביטול", role: .cancel, action: onDone)
+                }
                 Button(shift == nil ? "שמירה" : "עדכון") { Task { await save() } }
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(saving)
             }
@@ -100,9 +111,9 @@ struct ShiftForm: View {
         if let s = shift {
             date = parseDate(s.date); tin = s.in; tout = s.out
             specialOn = s.special?.rate != nil
-            spRate = s.special?.rate.map { String($0) } ?? ""
+            spRate = s.special?.rate.map(fmtNum) ?? ""
             spPart = s.special?.hours != nil
-            spHours = s.special?.hours.map { String($0) } ?? ""
+            spHours = s.special?.hours.map(fmtNum) ?? ""
         } else {
             date = model.month == currentMonth() ? .now : parseDate(model.month + "-01")
             tin = ""; tout = ""; specialOn = false; spRate = ""; spPart = false; spHours = ""
@@ -135,13 +146,18 @@ struct ShiftForm: View {
             }
             s.date = dateS; s.month = String(dateS.prefix(7)); s.in = tin; s.out = tout; s.special = special
             if s.isOpen { s.open = false }   // the manager closed a running phone shift
-            if await model.updateShift(s) { onDone() }
+            guard await model.updateShift(s) else { return }
+            UserDefaults.standard.set("\(tin)-\(tout)", forKey: "last-\(emp.id)")
+            if s.month != model.month { model.month = s.month }   // moved to another month → follow it, like the website
+            onDone()
         } else {
             let saved = await model.addShift(Shift(empId: emp.id, date: dateS, month: String(dateS.prefix(7)), in: tin, out: tout,
                                                    rate: model.rate(for: emp), special: special, paid: false))
             guard saved else { return }   // keep what was typed, so nothing is lost
+            UserDefaults.standard.set("\(tin)-\(tout)", forKey: "last-\(emp.id)")
             if String(dateS.prefix(7)) != model.month { model.month = String(dateS.prefix(7)) }
             tin = ""; tout = ""; specialOn = false; spRate = ""; spHours = ""
+            focusIn = true
         }
     }
 }

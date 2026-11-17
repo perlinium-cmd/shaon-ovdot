@@ -99,12 +99,17 @@ struct TimeWheelPicker: View {
     let title: String
     let twelve: Bool
     let initial: String
+    /// Exit wheel in AM/PM mode: the clock-in time; AM/PM then follows hour/minute (shorter shift) until the user picks it.
+    var pairedStart: String? = nil
+    var autoInitial = false
     var onDone: (String) -> Void
     var onCancel: () -> Void
 
     @State private var h = 0
     @State private var m = 0
     @State private var pm = 0
+    @State private var apTouched = false
+    @State private var lastAutoPm: Int?
 
     private var hours: [String] {
         if twelve { return ["12"] + (1...11).map { String($0) } }
@@ -113,6 +118,12 @@ struct TimeWheelPicker: View {
     private var value: String {
         let hh = twelve ? (h % 12) + (pm == 1 ? 12 : 0) : h
         return String(format: "%02d:%02d", hh, m)
+    }
+
+    private func autoAp() {
+        guard twelve, let start = pairedStart, !start.isEmpty, !apTouched else { return }
+        let want = bestAmpm(start: start, hour: h == 0 ? 12 : h, minute: m) == "PM" ? 1 : 0
+        if want != pm { lastAutoPm = want; pm = want }
     }
 
     var body: some View {
@@ -126,9 +137,14 @@ struct TimeWheelPicker: View {
                 RoundedRectangle(cornerRadius: 10).fill(.tint.opacity(0.12)).frame(height: WheelColumn.rowH)
                 HStack(spacing: 4) {
                     WheelColumn(items: hours, index: $h)
+                        .onChange(of: h) { _, _ in autoAp() }
                     Text(":").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
                     WheelColumn(items: (0..<60).map { String(format: "%02d", $0) }, index: $m, accentRows: [0, 15, 30, 45])
-                    if twelve { WheelColumn(items: ["AM", "PM"], index: $pm, width: 56) }
+                        .onChange(of: m) { _, _ in autoAp() }
+                    if twelve {
+                        WheelColumn(items: ["AM", "PM"], index: $pm, width: 56)
+                            .onChange(of: pm) { _, new in if new != lastAutoPm { apTouched = true } }   // changed by the user
+                    }
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
@@ -147,6 +163,7 @@ struct TimeWheelPicker: View {
             m = p.count == 2 ? p[1] : 0
             h = twelve ? hh % 12 : hh
             pm = hh < 12 ? 0 : 1
+            if autoInitial { autoAp() }
         }
     }
 }
