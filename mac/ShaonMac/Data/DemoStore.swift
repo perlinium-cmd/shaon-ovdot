@@ -61,6 +61,9 @@ final class DemoStore: DataStore {
     func addEmployee(_ e: Employee) async throws -> String { let id = newId(); var e = e; e.id = id; employees[id] = e; notify(); return id }
     func updateEmployee(_ e: Employee) async throws { employees[e.id] = e; notify() }
     func deleteEmployee(_ id: String) async throws {
+        shifts.values.filter { $0.empId == id }.forEach { toTrash("shifts", $0.id) }
+        payments.values.filter { $0.empId == id }.forEach { toTrash("payments", $0.id) }
+        toTrash("employees", id)
         employees[id] = nil; shifts = shifts.filter { $0.value.empId != id }; payments = payments.filter { $0.value.empId != id }
         devices = devices.filter { $0.value.empId != id }; requests = requests.filter { $0.value.empId != id }
         notices = notices.filter { $0.value.empId != id }; notify()
@@ -101,10 +104,16 @@ final class DemoStore: DataStore {
             switch w {
             case let .set(c, id, data): put(c, id, data)
             case let .update(c, id, data): put(c, id, (raw(c, id) ?? [:]).merging(data) { $1 })
-            case let .delete(c, id): put(c, id, nil)
+            case let .delete(c, id): toTrash(c, id); put(c, id, nil)
             }
         }
         notify()
+    }
+    /// Recycle bin, like users/{uid}/trash: "col__id" → {col, id, data, by}.
+    private(set) var trash: [String: [String: Any]] = [:]
+    private func toTrash(_ c: String, _ id: String) {
+        guard Trash.cols.contains(c), let d = raw(c, id) else { return }
+        trash[Trash.id(c, id)] = ["col": c, "id": id, "data": d, "by": "demo"]
     }
     func snapshot(_ refs: [(col: String, id: String)]) async throws -> [DocSnapshot] {
         refs.map { DocSnapshot(col: $0.col, id: $0.id, data: raw($0.col, $0.id)) }

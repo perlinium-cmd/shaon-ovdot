@@ -113,13 +113,17 @@ final class FirestoreStore: DataStore {
         try await write(b)
     }
     func deleteEmployee(_ id: String) async throws {
-        var refs = [doc("employees", id)]
+        var writes: [DocWrite] = []
+        var known: [String: [String: Any]] = [:]   // already read from the server: no second read for the copy
         for n in ["shifts", "payments", "devices", "deviceKeys", "requests", "notices"] {
-            refs += try await serverDocs(col(n).whereField("empId", isEqualTo: id)).map(\.reference)
+            for d in try await serverDocs(col(n).whereField("empId", isEqualTo: id)) {
+                writes.append(.delete(n, d.documentID))
+                if Trash.cols.contains(n) { known["\(n)/\(d.documentID)"] = d.data() }
+            }
         }
-        for chunk in stride(from: 0, to: refs.count, by: 400).map({ Array(refs[$0..<min($0 + 400, refs.count)]) }) {
-            let batch = db.batch(); chunk.forEach { batch.deleteDocument($0) }; try await write(batch)
-        }
+        // The employee last: if a batch fails on the way, she is still listed and the delete can be tried again.
+        writes.append(.delete("employees", id))
+        try await writeWithTrash(writes, known: known)
     }
 
     // MARK: shifts
@@ -150,14 +154,29 @@ final class FirestoreStore: DataStore {
 
     // MARK: batches + undo
     func newId(_ c: String) -> String { col(c).document().documentID }
-    func commit(_ writes: [DocWrite]) async throws {
-        for chunk in stride(from: 0, to: writes.count, by: 450).map({ Array(writes[$0..<min($0 + 450, writes.count)]) }) {
+    func commit(_ writes: [DocWrite]) async throws { try await writeWithTrash(writes) }
+
+    /// Every write that may delete goes through here (public/trash.js writeWithTrash). Each copy is read before anything
+    /// is written, so a read that fails (offline, a document not on this Mac) changes nothing. A document that no longer
+    /// exists is deleted without a copy. `known`: "col/id" → data already read from the server.
+    private func writeWithTrash(_ writes: [DocWrite], known: [String: [String: Any]] = [:]) async throws {
+        var copies: [[String: Any]?] = []
+        for w in writes {
+            guard case let .delete(c, id) = w, Trash.cols.contains(c) else { copies.append(nil); continue }
+            if let d = known["\(c)/\(id)"] { copies.append(d) } else { copies.append(try await snapshot([(c, id)]).first?.data) }
+        }
+        for group in Trash.plan(copies.map { $0 != nil }) {
             let b = db.batch()
-            for w in chunk {
-                switch w {
+            for i in group {
+                switch writes[i] {
                 case let .set(c, id, data): b.setData(data, forDocument: doc(c, id))
                 case let .update(c, id, data): b.updateData(data, forDocument: doc(c, id))
-                case let .delete(c, id): b.deleteDocument(doc(c, id))
+                case let .delete(c, id):
+                    if let copy = copies[i] {
+                        b.setData(["col": c, "id": id, "data": copy, "deletedAt": FieldValue.serverTimestamp(), "by": uid],
+                                  forDocument: doc("trash", Trash.id(c, id)))
+                    }
+                    b.deleteDocument(doc(c, id))
                 }
             }
             try await write(b)
