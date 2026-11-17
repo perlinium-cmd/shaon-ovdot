@@ -9,6 +9,8 @@ struct EmployeeView: View {
     @State private var editingEmployee = false
     @State private var confirmDelete: [String]?
     @State private var pairing = false
+    @State private var payList: [Shift]?
+    @State private var showPayments = false
 
     var body: some View {
         if let emp = model.emp(empId) {
@@ -36,6 +38,8 @@ struct EmployeeView: View {
             .onChange(of: selection) { _, new in inspectorOpen = new.count == 1 }
             .sheet(isPresented: $editingEmployee) { EmployeeEditor(emp: emp) }
             .sheet(isPresented: $pairing) { PairSheet(emp: emp) }
+            .sheet(item: Binding(get: { payList.map { PayRequest(shifts: $0) } }, set: { if $0 == nil { payList = nil } })) { PaySheet(emp: emp, shifts: $0.shifts) }
+            .sheet(isPresented: $showPayments) { PaymentsSheet(emp: emp) }
             .confirmationDialog("למחוק \(confirmDelete?.count ?? 0) משמרות?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
                 Button("מחיקה", role: .destructive) { let ids = confirmDelete ?? []; selection = []; Task { await model.deleteShifts(ids) } }
             } message: {
@@ -87,7 +91,11 @@ struct EmployeeView: View {
                             .help("השעה נרשמה בטלפון \(Int(g)) דקות לפני שהגיעה לשרת. זה קורה כשאין קליטה, או כשהשעון בטלפון לא נכון. כדאי לוודא.")
                     }
                     if isOvernight(s.in, s.out) { Image(systemName: "moon.fill").foregroundStyle(.indigo).help("משמרת לילה") }
-                    if s.special?.rate != nil { Image(systemName: "star.fill").foregroundStyle(.orange).help("תעריף מיוחד") }
+                    if let sp = s.special, let r = sp.rate {
+                        Text("מיוחד \(fmtMoney(r))" + (sp.hours != nil ? " · \(fmtNum(round2(specialMinutes(s) / 60))) ש׳" : ""))
+                            .font(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.orange.opacity(0.18), in: Capsule()).foregroundStyle(.orange)
+                    }
                 }
             }
             TableColumn("סה״כ") { s in
@@ -103,7 +111,7 @@ struct EmployeeView: View {
         }
         .contextMenu(forSelectionType: String.self) { ids in
             if !ids.isEmpty {
-                Button("סימון כשולם") { Task { await model.markPaid(Array(ids)) } }
+                Button("תשלום…") { payList = shifts.filter { ids.contains($0.id) && !$0.isPaid && !$0.isOpen } }
                 Button("סימון כלא שולם") { Task { await model.markUnpaid(Array(ids)) } }
                 Divider()
                 Button("מחיקה", role: .destructive) { confirmDelete = Array(ids) }
@@ -122,9 +130,10 @@ struct EmployeeView: View {
             Spacer()
             stat("שעות", fmtHM(a.minutes))
             stat("משמרות", "\(a.shifts.count)")
+            Button { showPayments = true } label: { Label("תשלומים", systemImage: "list.bullet.rectangle") }
             if !a.unpaidShifts.isEmpty {
-                Button { let ids = a.unpaidShifts.map(\.id); Task { await model.markPaid(ids) } } label: { Label("סימון הכל כשולם", systemImage: "checkmark") }
-                    .help("רושם תשלום אחד על \(fmtMoney(Double(a.unpaidShifts.reduce(0) { $0 + shiftPayAgorot($1, model.emp($1.empId), defaultRate: model.defaultRate) }) / 100)) · \(model.payMethod). משמרת שעדיין פעילה לא מסומנת.")
+                Button { payList = a.unpaidShifts } label: { Label("תשלום…", systemImage: "checkmark") }.buttonStyle(.borderedProminent)
+                    .help("רושם תשלום אחד על כל המשמרות שעוד לא שולמו. משמרת שעדיין פעילה לא נכללת.")
             }
         }
         .padding(16)
@@ -134,15 +143,27 @@ struct EmployeeView: View {
     }
 }
 
+struct PayRequest: Identifiable { let id = UUID(); let shifts: [Shift] }
+
 struct EmployeeEditor: View {
     let emp: Employee?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var rate = ""
+    @State private var applyToMonth = true
     @State private var error: String?
     @State private var askDelete = false
     @State private var saving = false   // a second click while saving must not add her twice
+
+    /// This month's unpaid shifts of hers, when the rate typed would change what she earns (same rule as the website).
+    private var affected: [Shift] {
+        guard let emp else { return [] }
+        let r = parseRate(rate)
+        if let r, r.isNaN { return [] }
+        var e = emp; e.rate = r
+        return model.rate(for: e) == model.rate(for: emp) ? [] : model.shifts(of: emp.id).filter { !$0.isPaid }
+    }
 
     var body: some View {
         Form {
@@ -150,6 +171,13 @@ struct EmployeeEditor: View {
             TextField("שם", text: $name).onChange(of: name) { error = nil }
             TextField("תעריף שעתי אישי (לא חובה)", text: $rate, prompt: Text(fmtNum(model.defaultRate ?? 0))).onChange(of: rate) { error = nil }
             Text("השאר ריק כדי להשתמש בתעריף הכללי (\(fmtMoney(model.defaultRate ?? 0)) לשעה).").font(.caption).foregroundStyle(.secondary)
+            if !affected.isEmpty {
+                let paidHere = emp.map { e in model.shifts(of: e.id).filter(\.isPaid).count } ?? 0
+                Toggle(isOn: $applyToMonth) {
+                    Text("לעדכן את התעריף גם ב\(affected.count == 1 ? "משמרת" : "-\(affected.count) המשמרות") של \(fmtMonth(model.month)) שעוד לא שולמו")
+                    if paidHere > 0 { Text(paidHere == 1 ? "משמרת ששולמה לא משתנה" : "\(paidHere) משמרות ששולמו לא משתנות") }
+                }
+            }
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
                 if let emp {
@@ -190,12 +218,16 @@ struct EmployeeEditor: View {
         if let r, r.isNaN { error = "תעריף לא תקין"; return }
         saving = true; defer { saving = false }
         if var emp {
+            let oldRate = model.rate(for: emp)
             emp.name = n; emp.rate = r
+            let toUpdate = applyToMonth && model.rate(for: emp) != oldRate ? affected : []
             // Not saved (e.g. a rate change without internet): keep the form open, the message says why.
             guard await model.updateEmployee(emp) else { return }
+            await model.applyRate(model.rate(for: emp), to: toUpdate)
             model.say("הפרטים נשמרו")
         } else {
-            guard await model.addEmployee(name: n, rate: r) != nil else { return }
+            guard let id = await model.addEmployee(name: n, rate: r) else { return }
+            NotificationCenter.default.post(name: .openEmployee, object: id)
         }
         dismiss()
     }

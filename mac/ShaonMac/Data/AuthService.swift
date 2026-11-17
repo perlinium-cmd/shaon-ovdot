@@ -12,6 +12,8 @@ final class AuthService {
     @ObservationIgnored private var handle: AuthStateDidChangeListenerHandle?
 
     init() {
+        // Unit tests host the app; they must not open Firebase (its local DB is locked by a running copy).
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { state = .signedOut; return }
         if FirebaseApp.app() == nil { FirebaseApp.configure() }
         Auth.auth().languageCode = "he"
         handle = Auth.auth().addStateDidChangeListener { [weak self] _, u in

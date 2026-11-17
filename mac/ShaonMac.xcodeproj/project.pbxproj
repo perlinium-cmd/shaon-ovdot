@@ -12,21 +12,26 @@
 		095C774C2D926803D3B281CC /* FirestoreStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD6CDA396753142860A60B /* FirestoreStore.swift */; };
 		0CBBA5520458B1176CA4F1C6 /* TimeParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE156B7D65C561DBC1CB57E /* TimeParse.swift */; };
 		0D4FCFBE49FA92FD553338BB /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B125D8531F3E37894792F2C2 /* SummaryView.swift */; };
+		169D82D3B70B4A93E946B972 /* TrashTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4975E8BBC500D4FDCB7BCDB2 /* TrashTests.swift */; };
 		16C1EBA5DA253EB2D89C1EDD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = EACDDB5510F6CE56DBF99CB2 /* FirebaseAuth */; };
 		17805D7EA176FBB9A928A017 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF35BA5F9DC9462FCDD338A9 /* AuthService.swift */; };
+		256976A6D5C3498E2EBD4B0B /* PaymentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 974E4110F7593C6D12B8D5CC /* PaymentSheets.swift */; };
 		26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
 		270898A73F954E5ED82B2C2A /* pay-cases.json in Resources */ = {isa = PBXBuildFile; fileRef = 07B7FDA00A5AC8DA488FEC10 /* pay-cases.json */; };
 		33D2BA7510643BB93E7F7A90 /* MonthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024E3EE0A494B115B42C0C49 /* MonthWidget.swift */; };
 		34920B8BD6AFFAFA90CFC1C6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 916D5017F14840F6A30FB450 /* GoogleSignIn */; };
 		4CC85B34559E2A8918BA5337 /* EmployeeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */; };
 		4D9C802C8609CB5C38B6B479 /* WidgetSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9612186FE36F14FD03B5D98 /* WidgetSync.swift */; };
+		4DDB876A9ECE7EA2CF019D0F /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0263E2F94890416A222B2695 /* MenuBarPanel.swift */; };
 		560FCF8B3A3DE33D29537223 /* QuickWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8867F29980876F111D83AB2 /* QuickWidget.swift */; };
+		57F2C3AEFB7912BF551C11BB /* ShaonIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAEFC945250159FC75ABEB2F /* ShaonIntents.swift */; };
 		651B7B00D24A2ABA704ABCFB /* WidgetSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */; };
 		6B0C6FFD9954F38C54DAA601 /* PhoneFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */; };
 		6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984AE7ECB486E8AA32223473 /* ShaonApp.swift */; };
 		6DD1EE7F2A262D5A981AB6FD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DEBA393FDF02098C2094F757 /* FirebaseFirestore */; };
 		76AABABD524F342F0646A63B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
 		789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65709F0F9F5DFBC5D7777D29 /* RootView.swift */; };
+		82C764BD7423936D9E142163 /* Exporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BB7A37C81EA786DE7FE14BF /* Exporter.swift */; };
 		8661B5B47B3FB0F11F0973AC /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB5685C675F79F93ECECEB4 /* AppModel.swift */; };
 		8E9D209734E87C4925468E05 /* PhonesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9300ED68601D21C54A76F48 /* PhonesView.swift */; };
 		8EEBA12F7E0E764E0075C242 /* WeekWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D88D48AA3535AD2478933E /* WeekWidget.swift */; };
@@ -34,10 +39,13 @@
 		98626561EF5EAC79B5A98BB5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DFC75CA9E9C75072C3343D8 /* Store.swift */; };
 		9BA4B0BF5C9845DAAF7D7C98 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */; };
 		A51C6576F6CC6ECA7854C431 /* ShaonWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8498548EA1C8E5C393D0958 /* libxlsxwriter in Frameworks */ = {isa = PBXBuildFile; productRef = 4246BBE9B85A129436618147 /* libxlsxwriter */; };
 		AC6B4E1B264D638DE4C7113F /* GearClick.swift in Sources */ = {isa = PBXBuildFile; fileRef = A896E25D54C73D73DEA728DB /* GearClick.swift */; };
 		AF7F8473B222D96444A4595E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E66C658E5DED5D91ADAFCB02 /* Assets.xcassets */; };
+		B119228A36AFE11957346D3C /* EmulatorRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D8517384440D8B2A22D3C2 /* EmulatorRulesTests.swift */; };
 		B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1311CAC5156FF83C775DE5 /* SettingsView.swift */; };
 		B3DB2B5266B34F024F4C0D19 /* QuickClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C8568915B8EA7C6D828CC9 /* QuickClock.swift */; };
+		B6623949BF7048CE3975BC4F /* AppRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0321CA3BAEDD30A8F59784 /* AppRuntime.swift */; };
 		BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7115E89A87DAEE80BD259411 /* PayTests.swift */; };
 		BE6DEA937DB26F15AD8F4A15 /* ShiftForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ABB2A61005AE7D603AAA1A7 /* ShiftForm.swift */; };
 		C22C609E3715F3F4BF6A1885 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8C68CA57BD3DAB3CDBFCADC /* Models.swift */; };
@@ -51,6 +59,7 @@
 		DE5882363DC9CAA5C2041158 /* TimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B7E28D470C20B8432B1EE0 /* TimeField.swift */; };
 		E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */; };
 		EAAB0A96940BB09E06B5C5A1 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5089DCDC13CEF78D03545100 /* Formatting.swift */; };
+		EB4492F55B1AFD78382F1DDC /* PaymentSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F1884C5F4AE746537E4F5C /* PaymentSheetTests.swift */; };
 		EB5FC708F8B5965772A64817 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */; };
 		F02CE955B926FB0B93EC052B /* QuickClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C8568915B8EA7C6D828CC9 /* QuickClock.swift */; };
 /* End PBXBuildFile section */
@@ -88,16 +97,20 @@
 
 /* Begin PBXFileReference section */
 		024E3EE0A494B115B42C0C49 /* MonthWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthWidget.swift; sourceTree = "<group>"; };
+		0263E2F94890416A222B2695 /* MenuBarPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanel.swift; sourceTree = "<group>"; };
 		049DD412C39A517266CA24B4 /* ShaonMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShaonMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		06FD6CDA396753142860A60B /* FirestoreStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreStore.swift; sourceTree = "<group>"; };
 		07B7FDA00A5AC8DA488FEC10 /* pay-cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pay-cases.json"; sourceTree = "<group>"; };
 		07CD608706DBCDDA58369DE4 /* EmployeeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeWidget.swift; sourceTree = "<group>"; };
+		17D8517384440D8B2A22D3C2 /* EmulatorRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmulatorRulesTests.swift; sourceTree = "<group>"; };
 		186200052F7B9A755804CC67 /* money-cases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "money-cases.json"; sourceTree = "<group>"; };
 		1AFF90FA47C5F85349DEDFA2 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonMac.entitlements; sourceTree = "<group>"; };
 		21C8568915B8EA7C6D828CC9 /* QuickClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickClock.swift; sourceTree = "<group>"; };
 		29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotTests.swift; sourceTree = "<group>"; };
+		3BB7A37C81EA786DE7FE14BF /* Exporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exporter.swift; sourceTree = "<group>"; };
 		429264388C0234E7293E8F9A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4975E8BBC500D4FDCB7BCDB2 /* TrashTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashTests.swift; sourceTree = "<group>"; };
 		5089DCDC13CEF78D03545100 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneFlowTests.swift; sourceTree = "<group>"; };
 		5BB5685C675F79F93ECECEB4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -107,9 +120,11 @@
 		7A1311CAC5156FF83C775DE5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7BE41D5889A506DF3E3F0BED /* Pay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pay.swift; sourceTree = "<group>"; };
 		86E0CBF19FC5ADB1C6E3C2D0 /* ShaonTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShaonTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8A0321CA3BAEDD30A8F59784 /* AppRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRuntime.swift; sourceTree = "<group>"; };
 		8ABB2A61005AE7D603AAA1A7 /* ShiftForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShiftForm.swift; sourceTree = "<group>"; };
 		8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeView.swift; sourceTree = "<group>"; };
 		9149960A6CA7DE765BE251B0 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
+		974E4110F7593C6D12B8D5CC /* PaymentSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentSheets.swift; sourceTree = "<group>"; };
 		984AE7ECB486E8AA32223473 /* ShaonApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaonApp.swift; sourceTree = "<group>"; };
 		9A1F9D36EB50945275CC3119 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
 		9C1D7D1F7A7DB5D3AF0036D3 /* TimeWheelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeWheelPicker.swift; sourceTree = "<group>"; };
@@ -117,10 +132,12 @@
 		9EE156B7D65C561DBC1CB57E /* TimeParse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeParse.swift; sourceTree = "<group>"; };
 		A896E25D54C73D73DEA728DB /* GearClick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GearClick.swift; sourceTree = "<group>"; };
 		A8C68CA57BD3DAB3CDBFCADC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		A9F1884C5F4AE746537E4F5C /* PaymentSheetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentSheetTests.swift; sourceTree = "<group>"; };
 		B125D8531F3E37894792F2C2 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		B9612186FE36F14FD03B5D98 /* WidgetSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSync.swift; sourceTree = "<group>"; };
 		BCCF6A29DB0DE492FCAC1DEA /* ShaonWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaonWidgets.swift; sourceTree = "<group>"; };
 		C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPayCasesTests.swift; sourceTree = "<group>"; };
+		CAEFC945250159FC75ABEB2F /* ShaonIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaonIntents.swift; sourceTree = "<group>"; };
 		CB54CE06E1D500992631EEF4 /* ShaonWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShaonWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6362FBF6260FD8133669292 /* ShaonWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShaonWidgets.entitlements; sourceTree = "<group>"; };
 		D8867F29980876F111D83AB2 /* QuickWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickWidget.swift; sourceTree = "<group>"; };
@@ -140,18 +157,38 @@
 				16C1EBA5DA253EB2D89C1EDD /* FirebaseAuth in Frameworks */,
 				6DD1EE7F2A262D5A981AB6FD /* FirebaseFirestore in Frameworks */,
 				34920B8BD6AFFAFA90CFC1C6 /* GoogleSignIn in Frameworks */,
+				A8498548EA1C8E5C393D0958 /* libxlsxwriter in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C25490349BC422377A69CA9 /* System */ = {
+			isa = PBXGroup;
+			children = (
+				8A0321CA3BAEDD30A8F59784 /* AppRuntime.swift */,
+			);
+			path = System;
+			sourceTree = "<group>";
+		};
+		3AD10E7EE2FB6700103D7FA1 /* Intents */ = {
+			isa = PBXGroup;
+			children = (
+				CAEFC945250159FC75ABEB2F /* ShaonIntents.swift */,
+			);
+			path = Intents;
+			sourceTree = "<group>";
+		};
 		3EE6607CD9E86B2C3CD8509D /* ShaonTests */ = {
 			isa = PBXGroup;
 			children = (
+				17D8517384440D8B2A22D3C2 /* EmulatorRulesTests.swift */,
+				A9F1884C5F4AE746537E4F5C /* PaymentSheetTests.swift */,
 				7115E89A87DAEE80BD259411 /* PayTests.swift */,
 				588E8756F7E0351F7192A608 /* PhoneFlowTests.swift */,
 				C4F23CA36CE57FAD38D8FA05 /* SharedPayCasesTests.swift */,
+				4975E8BBC500D4FDCB7BCDB2 /* TrashTests.swift */,
 				29C25E3C143005E4430DDA03 /* WidgetSnapshotTests.swift */,
 			);
 			path = ShaonTests;
@@ -170,6 +207,8 @@
 			isa = PBXGroup;
 			children = (
 				8C4A6CA754A027A40C33DFE1 /* EmployeeView.swift */,
+				0263E2F94890416A222B2695 /* MenuBarPanel.swift */,
+				974E4110F7593C6D12B8D5CC /* PaymentSheets.swift */,
 				E9300ED68601D21C54A76F48 /* PhonesView.swift */,
 				65709F0F9F5DFBC5D7777D29 /* RootView.swift */,
 				7A1311CAC5156FF83C775DE5 /* SettingsView.swift */,
@@ -209,6 +248,14 @@
 				A8C68CA57BD3DAB3CDBFCADC /* Models.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		916F5DE2A67E7821383E35CF /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				3BB7A37C81EA786DE7FE14BF /* Exporter.swift */,
+			);
+			path = Export;
 			sourceTree = "<group>";
 		};
 		A94D14645BE2B4924B446D63 /* Data */ = {
@@ -291,9 +338,12 @@
 				1D75326CDB8C9162B4505D5D /* ShaonMac.entitlements */,
 				B2CC6A8385CC363504E5B6E1 /* App */,
 				A94D14645BE2B4924B446D63 /* Data */,
+				916F5DE2A67E7821383E35CF /* Export */,
 				6EDEBC024FA9E1E20F305EE0 /* Feedback */,
+				3AD10E7EE2FB6700103D7FA1 /* Intents */,
 				F2D9B0769D96475AC3E07F93 /* Logic */,
 				8B8C9AA882348D8119105BD2 /* Models */,
+				0C25490349BC422377A69CA9 /* System */,
 				48CFA1C1DF8D89F66318337D /* Views */,
 				AA52E9DEBFEE98944875D9DB /* Wheel */,
 			);
@@ -358,6 +408,7 @@
 				EACDDB5510F6CE56DBF99CB2 /* FirebaseAuth */,
 				DEBA393FDF02098C2094F757 /* FirebaseFirestore */,
 				916D5017F14840F6A30FB450 /* GoogleSignIn */,
+				4246BBE9B85A129436618147 /* libxlsxwriter */,
 			);
 			productName = ShaonMac;
 			productReference = 049DD412C39A517266CA24B4 /* ShaonMac.app */;
@@ -397,6 +448,7 @@
 			packageReferences = (
 				D731E37DB2BF3039ADD16883 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				B2CA8AC11382497C99D66527 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				BA7AF1518E07762B9A412EE3 /* XCRemoteSwiftPackageReference "libxlsxwriter" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CA1992C8BF070AD2836514D2 /* Products */;
@@ -436,9 +488,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B119228A36AFE11957346D3C /* EmulatorRulesTests.swift in Sources */,
 				BA0A954283FCFDBAC9ADFECE /* PayTests.swift in Sources */,
+				EB4492F55B1AFD78382F1DDC /* PaymentSheetTests.swift in Sources */,
 				6B0C6FFD9954F38C54DAA601 /* PhoneFlowTests.swift in Sources */,
 				E01F69DFB73CAF2840A8EE5C /* SharedPayCasesTests.swift in Sources */,
+				169D82D3B70B4A93E946B972 /* TrashTests.swift in Sources */,
 				651B7B00D24A2ABA704ABCFB /* WidgetSnapshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -448,20 +503,25 @@
 			buildActionMask = 2147483647;
 			files = (
 				8661B5B47B3FB0F11F0973AC /* AppModel.swift in Sources */,
+				B6623949BF7048CE3975BC4F /* AppRuntime.swift in Sources */,
 				17805D7EA176FBB9A928A017 /* AuthService.swift in Sources */,
 				063E186EFE82CEEDD372F65E /* DemoStore.swift in Sources */,
 				D4CB958B5A4CA760AE3AB2AA /* EmployeeView.swift in Sources */,
+				82C764BD7423936D9E142163 /* Exporter.swift in Sources */,
 				095C774C2D926803D3B281CC /* FirestoreStore.swift in Sources */,
 				EAAB0A96940BB09E06B5C5A1 /* Formatting.swift in Sources */,
 				AC6B4E1B264D638DE4C7113F /* GearClick.swift in Sources */,
 				D40B4F5DBAB0F051A5DA967B /* Haptics.swift in Sources */,
+				4DDB876A9ECE7EA2CF019D0F /* MenuBarPanel.swift in Sources */,
 				26BB10804FBD8EA0BFF66AD1 /* Models.swift in Sources */,
 				CAB621B05001EBA1CD73AD64 /* Pay.swift in Sources */,
+				256976A6D5C3498E2EBD4B0B /* PaymentSheets.swift in Sources */,
 				8E9D209734E87C4925468E05 /* PhonesView.swift in Sources */,
 				F02CE955B926FB0B93EC052B /* QuickClock.swift in Sources */,
 				789A08BF5374B72A1A6E4B05 /* RootView.swift in Sources */,
 				B333E066D4D0273BCFA0D243 /* SettingsView.swift in Sources */,
 				6D20BB0B112B7D823A9ED82F /* ShaonApp.swift in Sources */,
+				57F2C3AEFB7912BF551C11BB /* ShaonIntents.swift in Sources */,
 				BE6DEA937DB26F15AD8F4A15 /* ShiftForm.swift in Sources */,
 				98626561EF5EAC79B5A98BB5 /* Store.swift in Sources */,
 				0D4FCFBE49FA92FD553338BB /* SummaryView.swift in Sources */,
@@ -802,17 +862,30 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		BA7AF1518E07762B9A412EE3 /* XCRemoteSwiftPackageReference "libxlsxwriter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jmcnamara/libxlsxwriter";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
 		D731E37DB2BF3039ADD16883 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 12.0.0;
+				minimumVersion = 12.19.3;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		4246BBE9B85A129436618147 /* libxlsxwriter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA7AF1518E07762B9A412EE3 /* XCRemoteSwiftPackageReference "libxlsxwriter" */;
+			productName = libxlsxwriter;
+		};
 		916D5017F14840F6A30FB450 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B2CA8AC11382497C99D66527 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;

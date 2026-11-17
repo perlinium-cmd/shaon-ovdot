@@ -8,6 +8,32 @@ enum DocWrite {
     case delete(_ col: String, _ id: String)
 }
 
+/// Recycle bin, the same as the website (public/trash.js) and the phone: an employee, shift or payment is never only
+/// deleted. A full copy of it, exactly as stored, goes to users/{uid}/trash/{col}__{id} ({col, id, data, deletedAt, by})
+/// in the same batch as the delete, so nothing with money in it is gone for good.
+enum Trash {
+    static let cols: Set<String> = ["employees", "shifts", "payments"]
+    /// Copies per batch (the rules check each copy against the live document, a few reads per copy).
+    static let perBatch = 5
+    /// Firestore allows 500 writes per batch.
+    static let maxWrites = 450
+    static func id(_ col: String, _ id: String) -> String { "\(col)__\(id)" }
+
+    /// Cuts writes into batches, in order: at most `perBatch` copies and `maxWrites` writes each (a delete with a copy
+    /// counts 2). `copies[i]` says whether write i carries a copy. Returns the indexes of each batch.
+    static func plan(_ copies: [Bool]) -> [[Int]] {
+        var out: [[Int]] = [], cur: [Int] = [], writes = 0, n = 0
+        for (i, copy) in copies.enumerated() {
+            let w = copy ? 2 : 1
+            if writes > 0 && (writes + w > maxWrites || (copy && n == perBatch)) { out.append(cur); cur = []; writes = 0; n = 0 }
+            cur.append(i); writes += w
+            if copy { n += 1 }
+        }
+        if !cur.isEmpty { out.append(cur) }
+        return out
+    }
+}
+
 /// A document as it was (data nil = it did not exist), so a change can be undone exactly.
 struct DocSnapshot {
     let col: String
@@ -32,6 +58,8 @@ protocol DataStore: AnyObject {
     var isDemo: Bool { get }
     /// Problems to show the user: a listener that failed, or a write the server refused after it was saved here.
     var onProblem: ((String) -> Void)? { get set }
+    /// The server refused to read this account's data (signed in with an account that has no access).
+    var onDenied: (() -> Void)? { get set }
     func watchSettings(_ cb: @escaping (AppSettings) -> Void) -> () -> Void
     func saveSettings(_ s: AppSettings) async throws
     func watchEmployees(_ cb: @escaping ([Employee]) -> Void) -> () -> Void
@@ -40,6 +68,8 @@ protocol DataStore: AnyObject {
     func deleteEmployee(_ id: String) async throws
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void
     func addShift(_ s: Shift) async throws -> String
+    /// All payment records of one employee (every month). Changed only through `commit`.
+    func watchPayments(empId: String, _ cb: @escaping ([Payment]) -> Void) -> () -> Void
 
     // Writes that must happen together (payments + the shifts they cover), and exact undo.
     func newId(_ col: String) -> String

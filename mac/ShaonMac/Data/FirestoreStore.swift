@@ -5,15 +5,37 @@ import FirebaseFirestore
 @MainActor
 final class FirestoreStore: DataStore {
     let isDemo = false
-    private let db = Firestore.firestore()
+    private let db: Firestore
     private let uid: String
     var onProblem: ((String) -> Void)?
+    var onDenied: (() -> Void)?
 
-    init(uid: String) { self.uid = uid }
+    /// `db`: only the emulator tests (EmulatorRulesTests) pass another one.
+    init(uid: String, db: Firestore = Firestore.firestore()) { self.uid = uid; self.db = db }
 
     private func col(_ n: String) -> CollectionReference { db.collection("users").document(uid).collection(n) }
     private func doc(_ n: String, _ id: String) -> DocumentReference { col(n).document(id) }
-    private func listenerFailed(_ e: Error) { print(e); onProblem?("בעיה בחיבור לנתונים") }
+    private func listenerFailed(_ e: Error) {
+        print(e)
+        let ns = e as NSError
+        if ns.domain == FirestoreErrorDomain && ns.code == FirestoreErrorCode.permissionDenied.rawValue { onDenied?(); return }
+        onProblem?("בעיה בחיבור לנתונים")
+    }
+
+    /// Firestore first answers from this Mac's copy, which right after sign-in may be empty. Showing that would flash
+    /// "add your first employee" before the real data arrives, so an empty first answer from the copy is held back
+    /// until the server answers (or 4 seconds pass, e.g. without internet). Everything after that passes as it comes.
+    @MainActor private final class FirstAnswerGate {
+        private var passed = false
+        func pass(fromCache: Bool, empty: Bool, _ emit: @escaping () -> Void) {
+            if !passed && fromCache && empty {
+                Task { @MainActor in try? await Task.sleep(for: .seconds(4)); if !self.passed { self.passed = true; emit() } }
+                return
+            }
+            passed = true
+            emit()
+        }
+    }
 
     // MARK: writes that never hang offline
     // Firestore keeps a write on this Mac at once (in its on-disk cache, so it survives quitting) and sends it when it
@@ -54,10 +76,13 @@ final class FirestoreStore: DataStore {
 
     // MARK: settings
     func watchSettings(_ cb: @escaping (AppSettings) -> Void) -> () -> Void {
-        let l = doc("settings", "main").addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = doc("settings", "main").addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            let d = snap?.data() ?? [:]
-            cb(self?.decode(AppSettings.self, id: "main", d) ?? AppSettings())
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: !snap.exists) {
+                cb(self?.decode(AppSettings.self, id: "main", snap.data() ?? [:]) ?? AppSettings())
+            }
         }
         return { l.remove() }
     }
@@ -68,9 +93,13 @@ final class FirestoreStore: DataStore {
 
     // MARK: employees
     func watchEmployees(_ cb: @escaping ([Employee]) -> Void) -> () -> Void {
-        let l = col("employees").addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = col("employees").addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            cb((snap?.documents ?? []).compactMap { self?.decode(Employee.self, id: $0.documentID, $0.data()) })
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: snap.isEmpty) {
+                cb(snap.documents.compactMap { self?.decode(Employee.self, id: $0.documentID, $0.data()) })
+            }
         }
         return { l.remove() }
     }
@@ -85,20 +114,35 @@ final class FirestoreStore: DataStore {
         try await write(b)
     }
     func deleteEmployee(_ id: String) async throws {
-        var refs = [doc("employees", id)]
+        var writes: [DocWrite] = []
+        var known: [String: [String: Any]] = [:]   // already read from the server: no second read for the copy
         for n in ["shifts", "payments", "devices", "deviceKeys", "requests", "notices"] {
-            refs += try await serverDocs(col(n).whereField("empId", isEqualTo: id)).map(\.reference)
+            for d in try await serverDocs(col(n).whereField("empId", isEqualTo: id)) {
+                writes.append(.delete(n, d.documentID))
+                if Trash.cols.contains(n) { known["\(n)/\(d.documentID)"] = d.data() }
+            }
         }
-        for chunk in stride(from: 0, to: refs.count, by: 400).map({ Array(refs[$0..<min($0 + 400, refs.count)]) }) {
-            let batch = db.batch(); chunk.forEach { batch.deleteDocument($0) }; try await write(batch)
-        }
+        // The employee last: if a batch fails on the way, she is still listed and the delete can be tried again.
+        writes.append(.delete("employees", id))
+        try await writeWithTrash(writes, known: known)
     }
 
     // MARK: shifts
     func watchShifts(month: String, _ cb: @escaping ([Shift]) -> Void) -> () -> Void {
-        let l = col("shifts").whereField("month", isEqualTo: month).addSnapshotListener { [weak self] snap, err in
+        let gate = FirstAnswerGate()
+        let l = col("shifts").whereField("month", isEqualTo: month).addSnapshotListener(includeMetadataChanges: true) { [weak self] snap, err in
             if let err { self?.listenerFailed(err); return }
-            cb((snap?.documents ?? []).compactMap { self?.decode(Shift.self, id: $0.documentID, $0.data()) })
+            guard let snap else { return }
+            gate.pass(fromCache: snap.metadata.isFromCache, empty: snap.isEmpty) {
+                cb(snap.documents.compactMap { self?.decode(Shift.self, id: $0.documentID, $0.data()) })
+            }
+        }
+        return { l.remove() }
+    }
+    func watchPayments(empId: String, _ cb: @escaping ([Payment]) -> Void) -> () -> Void {
+        let l = col("payments").whereField("empId", isEqualTo: empId).addSnapshotListener { [weak self] snap, err in
+            if let err { self?.listenerFailed(err); return }
+            cb((snap?.documents ?? []).compactMap { self?.decode(Payment.self, id: $0.documentID, $0.data()) })
         }
         return { l.remove() }
     }
@@ -111,17 +155,43 @@ final class FirestoreStore: DataStore {
 
     // MARK: batches + undo
     func newId(_ c: String) -> String { col(c).document().documentID }
-    func commit(_ writes: [DocWrite]) async throws {
-        for chunk in stride(from: 0, to: writes.count, by: 450).map({ Array(writes[$0..<min($0 + 450, writes.count)]) }) {
+    func commit(_ writes: [DocWrite]) async throws { try await writeWithTrash(writes) }
+
+    /// Every write that may delete goes through here (public/trash.js writeWithTrash). Each copy is read before anything
+    /// is written, so a read that fails (offline, a document not on this Mac) changes nothing. A document that no longer
+    /// exists is deleted without a copy. `known`: "col/id" → data already read from the server.
+    private func writeWithTrash(_ writes: [DocWrite], known: [String: [String: Any]] = [:]) async throws {
+        var copies: [[String: Any]?] = []
+        for w in writes {
+            guard case let .delete(c, id) = w, Trash.cols.contains(c) else { copies.append(nil); continue }
+            if let d = known["\(c)/\(id)"] { copies.append(d) } else { copies.append(try await current(c, id)) }
+        }
+        for group in Trash.plan(copies.map { $0 != nil }) {
             let b = db.batch()
-            for w in chunk {
-                switch w {
+            for i in group {
+                switch writes[i] {
                 case let .set(c, id, data): b.setData(data, forDocument: doc(c, id))
                 case let .update(c, id, data): b.updateData(data, forDocument: doc(c, id))
-                case let .delete(c, id): b.deleteDocument(doc(c, id))
+                case let .delete(c, id):
+                    if let copy = copies[i] {
+                        b.setData(["col": c, "id": id, "data": copy, "deletedAt": FieldValue.serverTimestamp(), "by": uid],
+                                  forDocument: doc("trash", Trash.id(c, id)))
+                    }
+                    b.deleteDocument(doc(c, id))
                 }
             }
             try await write(b)
+        }
+    }
+    /// A document as it is now, for its copy in the bin: from the server when there is a connection — this Mac's copy of
+    /// a document nothing here listens to (another month) may be old, and the rules take only an exact copy
+    /// (EmulatorRulesTests) — else this Mac's copy; StoreError.offline when there is neither.
+    private func current(_ c: String, _ id: String) async throws -> [String: Any]? {
+        do {
+            let s = try await doc(c, id).getDocument()
+            return s.exists ? s.data() : nil
+        } catch let e as NSError where e.domain == FirestoreErrorDomain && e.code == FirestoreErrorCode.unavailable.rawValue {
+            throw StoreError.offline
         }
     }
     /// Reads this Mac's copy first, so undo works offline; asks the server only for what isn't here.

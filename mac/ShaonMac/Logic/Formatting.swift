@@ -34,21 +34,29 @@ func fmtNum(_ n: Double) -> String {
 }
 func nShifts(_ n: Int) -> String { n == 1 ? "משמרת אחת" : "\(n) משמרות" }
 
-func avatarColor(_ name: String) -> Color {
-    var h = 0
-    for u in name.unicodeScalars { h = (h * 31 + Int(u.value)) % 360 }
-    let hue = [168, 200, 262, 330, 24, 45, 140, 290][h % 8]
-    return Color(hue: Double(hue) / 360, saturation: 0.6, brightness: 0.62)
+/// hsl → SwiftUI colour (HSL and HSB differ, so convert).
+private func hsl(_ hue: Int, _ s: Double, _ l: Double) -> Color {
+    let b = l + s * min(l, 1 - l)
+    return Color(hue: Double(hue) / 360, saturation: b == 0 ? 0 : 2 * (1 - l / b), brightness: b)
 }
+/// Same hash and hue table as avatarStyle() on the website, so a name looks identical on both.
+func avatarHue(_ name: String) -> Int {
+    var h = 0
+    for u in name.utf16 { h = (h * 31 + Int(u)) % 360 }
+    return [168, 200, 262, 330, 24, 45, 140, 290][h % 8]
+}
+func avatarColor(_ name: String) -> Color { hsl(avatarHue(name), 0.60, 0.38) }
 
 struct Avatar: View {
     let name: String
     var size: CGFloat = 30
     var body: some View {
-        Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)))
+        let hue = avatarHue(name)
+        Text(String((name.trimmingCharacters(in: .whitespaces).first).map(String.init) ?? "?"))
             .font(.system(size: size * 0.45, weight: .semibold))
-            .foregroundStyle(avatarColor(name))
+            .foregroundStyle(hsl(hue, 0.60, 0.38).mix(with: .primary, by: 0.15))
             .frame(width: size, height: size)
-            .background(avatarColor(name).opacity(0.18), in: Circle())
+            .background(hsl(hue, 0.65, 0.50).opacity(0.18), in: Circle())
+            .accessibilityHidden(true)
     }
 }

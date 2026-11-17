@@ -19,15 +19,21 @@ struct RootView: View {
     @State private var route: Route? = Route(launchArg: UserDefaults.standard.string(forKey: "route")) ?? .summary
     @State private var newEmployee = false
     @State private var search = ""
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
-            if !model.isLoaded { ProgressView("טוען…") }
+            if model.denied { DeniedView() }
+            else if !model.isLoaded { ProgressView("טוען…") }
             else if model.defaultRate == nil { Onboarding(step: 1) }
             else if model.visibleEmployees().isEmpty && (model.employees ?? []).isEmpty { Onboarding(step: 2) }
             else { main }
         }
-        .onAppear { model.undoManager = undoManager }
+        .onAppear { model.undoManager = undoManager; Reminders.update(model: model) }
+        .onChange(of: model.agg.values.map(\.unpaid)) { _, _ in Reminders.update(model: model) }
+        .onChange(of: model.employees) { _, list in
+            if case .employee(let id) = route, let list, !list.contains(where: { $0.id == id }) { route = .summary }
+        }
         .onChange(of: undoManager) { _, u in model.undoManager = u }
         .overlay(alignment: .bottom) {
             if let t = model.toast {
@@ -48,7 +54,8 @@ struct RootView: View {
                     .tag(Route.requests)
                 Label("טלפונים מחוברים", systemImage: "iphone.gen3").tag(Route.phones)
                 Section("עובדות") {
-                    ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)) }
+                    ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id))
+                        .contextMenu { Button("פתיחה בחלון חדש") { openWindow(id: "employee", value: e.id) } } }
                 }
                 let arch = filtered(active: false)
                 if !arch.isEmpty {
@@ -71,13 +78,7 @@ struct RootView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .principal) {
-                Button { model.month = shiftMonthBy(model.month, -1) } label: { Image(systemName: "chevron.right") }.help("חודש קודם (⌘])")
-                Button(fmtMonth(model.month)) { model.month = currentMonth() }.help("חזרה לחודש הנוכחי (⌘T)")
-                Button { model.month = shiftMonthBy(model.month, 1) } label: { Image(systemName: "chevron.left") }.help("חודש הבא (⌘[)")
-            }
+            .toolbar { ToolbarItem(placement: .navigation) { MonthSwitcher() } }   // in the detail column so it isn't collapsed into »
         }
         .sheet(isPresented: $newEmployee) { EmployeeEditor(emp: nil) }
         .onReceive(NotificationCenter.default.publisher(for: .newEmployee)) { _ in newEmployee = true }
@@ -88,10 +89,15 @@ struct RootView: View {
             if url.host() == "employee", let id = url.pathComponents.dropFirst().first, model.emp(id) != nil { route = .employee(id) }
             else { route = .summary }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openEmployee)) { if let id = $0.object as? String { route = .employee(id) } }
+        .onReceive(NotificationCenter.default.publisher(for: .exportExcel)) { _ in Exporter.excel(model) }
+        .onReceive(NotificationCenter.default.publisher(for: .exportPDF)) { _ in Exporter.savePDF(model) }
+        .onReceive(NotificationCenter.default.publisher(for: .printReport)) { _ in Exporter.printReport(model) }
     }
 
     private func filtered(active: Bool) -> [Employee] {
-        model.visibleEmployees().filter { $0.isActive == active && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) }
+        (active ? model.visibleEmployees().filter(\.isActive) : (model.employees ?? []).filter { !$0.isActive })
+            .filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
     }
     private func row(_ e: Employee, _ a: Agg?) -> some View {
         HStack {
@@ -103,6 +109,29 @@ struct RootView: View {
             Spacer()
             if let a, !a.unpaidShifts.isEmpty { Text(fmtMoney(a.unpaid)).font(.caption).foregroundStyle(.secondary).monospacedDigit() }
             else if let a, a.allPaid { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+        }
+    }
+}
+
+struct DeniedView: View {
+    @Environment(AuthService.self) private var auth: AuthService?
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.circle").font(.system(size: 44)).foregroundStyle(.red)
+            Text("אין הרשאה").font(.title.weight(.bold))
+            if let auth, case .signedIn(_, _, let email) = auth.state { Text("החשבון \(email) לא מורשה לגשת למערכת.").foregroundStyle(.secondary) }
+            Button("התחברות עם חשבון אחר") { auth?.signOut() }.buttonStyle(.borderedProminent)
+        }.padding(40)
+    }
+}
+
+struct MonthSwitcher: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        HStack {
+            Button { model.month = shiftMonthBy(model.month, -1) } label: { Image(systemName: "chevron.right") }.help("חודש קודם (⌘])")
+            Button(fmtMonth(model.month)) { model.month = currentMonth() }.help("חזרה לחודש הנוכחי (⌘T)")
+            Button { model.month = shiftMonthBy(model.month, 1) } label: { Image(systemName: "chevron.left") }.help("חודש הבא (⌘[)")
         }
     }
 }
@@ -140,4 +169,7 @@ extension Notification.Name {
     static let newEmployee = Notification.Name("shaon.newEmployee")
     static let showSummary = Notification.Name("shaon.showSummary")
     static let openRoute = Notification.Name("shaon.openRoute")
+    static let exportExcel = Notification.Name("shaon.exportExcel")
+    static let exportPDF = Notification.Name("shaon.exportPDF")
+    static let printReport = Notification.Name("shaon.printReport")
 }
