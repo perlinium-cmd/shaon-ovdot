@@ -11,6 +11,7 @@ import {
 import { decisionOps, plainDoc, RequestError } from '../public/phone.js';
 import * as fsMod from 'firebase/firestore';
 import { writeWithTrash, trashId, TRASH_PER_BATCH } from '../public/trash.js';
+import { trashGroups, neededRefs, restorePlan } from '../public/restore.js';
 
 const OWNER = 'boss';
 const CODE = 'K7QM4XPA';
@@ -672,5 +673,26 @@ describe('recycle bin is required (rules)', () => {
     await assertSucceeds(deleteDoc(u(ownerDb(), 'requests', 'r1')));
     await assertSucceeds(deleteDoc(u(ownerDb(), 'shifts', 'nothing-here')));
     await assertSucceeds(setDoc(u(ownerDb(), 'settings', 'main'), { defaultRate: 41 }, { merge: true }));
+  });
+});
+
+describe('recycle bin restore (public/restore.js) under the rules', () => {
+  it('a paid shift deleted with its payment comes back exactly, both of them', async () => {
+    const db = ownerDb();
+    const sx = { empId: 'e1', date: '2026-11-04', month: '2026-11', in: '08:00', out: '14:00', rate: 40, paid: true, paidAt: 5, paymentId: 'px', syncedAt: Timestamp.fromMillis(1000) };
+    const px = { empId: 'e1', amount: 240, date: '2026-11-04', method: 'מזומן', shiftIds: ['sx'], createdAt: 5 };
+    await seed(async (d) => { await setDoc(u(d, 'shifts', 'sx'), sx); await setDoc(u(d, 'payments', 'px'), px); });
+    const write = (ops) => writeWithTrash({ fs: fsMod, db, ref: (c, id) => u(db, c, id), read: getDoc, by: OWNER, ops, commit: (b) => b.commit() });
+    await write([{ op: 'delete', col: 'payments', id: 'px' }, { op: 'delete', col: 'shifts', id: 'sx' }]);
+
+    const bin = await getDocs(collection(db, 'users', OWNER, 'trash'));
+    const items = bin.docs.map((d) => ({ ...d.data(), deletedAt: d.data().deletedAt.toMillis() }));
+    const [g] = trashGroups(items, new Set());
+    assert.equal(g.kind, 'shift'); assert.equal(g.members[0].id, 'px');
+    const live = new Map(await Promise.all(neededRefs(g).map(async (r) => [`${r.col}/${r.id}`, (await getDoc(u(db, r.col, r.id))).data() ?? null])));
+    const plan = restorePlan(g, { live, payA: () => 0 });
+    await assertSucceeds(write(plan.ops));
+    assert.deepEqual((await getDoc(u(db, 'shifts', 'sx'))).data(), sx);
+    assert.deepEqual((await getDoc(u(db, 'payments', 'px'))).data(), px);
   });
 });

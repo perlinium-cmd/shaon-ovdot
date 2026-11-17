@@ -3,7 +3,7 @@
 //   - Demo (localStorage) — open the site with ?demo to try it without an account
 
 import { decisionOps, plainDoc, localMillis } from './phone.js';
-import { writeWithTrash } from './trash.js';
+import { writeWithTrash, TRASHED, trashId } from './trash.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo');
 
@@ -194,6 +194,25 @@ async function createFirebaseStore() {
     updatePayment: (id, data) => settle(fs.updateDoc(docRef('payments', id), data)),
     deletePayment: (id) => write([{ op: 'delete', col: 'payments', id }]),
 
+    /** The recycle bin, newest first: {items: [{col, id, data, deletedAt (ms)}], live: Set of "col/id" that exist
+     *  again}. Asks the server (it falls back to this device's copy offline). */
+    async listTrash() {
+      const snap = await fs.getDocs(fs.query(colRef('trash'), fs.orderBy('deletedAt', 'desc'), fs.limit(500)));
+      const items = snap.docs.map((d) => {
+        const t = d.data({ serverTimestamps: 'estimate' });
+        return { col: t.col, id: t.id, data: t.data, deletedAt: t.deletedAt?.toMillis?.() ?? 0 };
+      });
+      const live = new Set();
+      for (const col of TRASHED) {
+        const ids = [...new Set(items.filter((t) => t.col === col).map((t) => t.id))];
+        for (let i = 0; i < ids.length; i += 30) {
+          const s = await fs.getDocs(fs.query(colRef(col), fs.where(fs.documentId(), 'in', ids.slice(i, i + 30))));
+          s.docs.forEach((d) => live.add(`${col}/${d.id}`));
+        }
+      }
+      return { items, live };
+    },
+
     /* ---------- employee phones (same as the Mac: FirestoreStore.swift) ---------- */
     /** Shifts running right now (clocked in from a phone), in any month. */
     watchOpenShifts(cb, onErr) {
@@ -301,7 +320,15 @@ function createDemoStore() {
   };
   let data = load() || { settings: {}, employees: {}, shifts: {} };
   data.payments ||= {};
+  data.trash ||= {};
   for (const c of PHONE_COLS) data[c] ||= {};
+  /** Same as the real store: an employee, shift or payment that is deleted keeps a copy in the bin. */
+  const drop = (col, id, at = Date.now()) => {   // at: one time for one write, as the server's batch time
+    if (TRASHED.includes(col) && data[col]?.[id]) {
+      data.trash[trashId(col, id)] = { col, id, data: clone(data[col][id]), deletedAt: at, by: 'demo' };
+    }
+    delete data[col]?.[id];
+  };
   const listeners = new Set();
   const persist = () => {
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignore */ }
@@ -336,7 +363,7 @@ function createDemoStore() {
     )),
     async addShift(d) { await delay(); const id = uid(); data.shifts[id] = { ...d, createdAt: Date.now() }; persist(); return { id }; },
     async updateShift(id, d) { await delay(); data.shifts[id] = { ...data.shifts[id], ...d }; persist(); },
-    async deleteShift(id) { await delay(); delete data.shifts[id]; persist(); },
+    async deleteShift(id) { await delay(); drop('shifts', id); persist(); },
     async updateShifts(ids, d) { await delay(); ids.forEach((id) => { data.shifts[id] = { ...data.shifts[id], ...d }; }); persist(); },
     async countEmployeeShifts(id) { return Object.values(data.shifts).filter((s) => s.empId === id).length; },
     async employeeBundle(id) {
@@ -349,7 +376,8 @@ function createDemoStore() {
     async snapshot(items) { return items.map(({ col, id }) => ({ col, id, data: data[col]?.[id] ? clone(data[col][id]) : null })); },
     async restore(snaps) {
       await delay();
-      snaps.forEach(({ col, id, data: d }) => { data[col] ||= {}; if (d) data[col][id] = clone(d); else delete data[col][id]; });
+      const at = Date.now();
+      snaps.forEach(({ col, id, data: d }) => { data[col] ||= {}; if (d) data[col][id] = clone(d); else drop(col, id, at); });
       persist();
     },
     newId: () => uid(),
@@ -357,11 +385,12 @@ function createDemoStore() {
       await delay();
       // Same as a Firestore batch: an update of a missing document fails the whole batch.
       if (ops.some(({ op, col, id }) => op === 'update' && !data[col]?.[id])) throw Object.assign(new Error('not found'), { code: 'not-found' });
+      const at = Date.now();
       for (const { op, col, id, data: d } of ops) {
         data[col] ||= {};
         if (op === 'set') data[col][id] = clone(d);
         else if (op === 'update') data[col][id] = { ...data[col][id], ...clone(d) };
-        else delete data[col][id];
+        else drop(col, id, at);
       }
       persist();
     },
@@ -378,7 +407,13 @@ function createDemoStore() {
     )),
     async addPayment(d) { await delay(); const id = uid(); data.payments[id] = { ...d, createdAt: Date.now() }; persist(); return { id }; },
     async updatePayment(id, d) { await delay(); data.payments[id] = { ...data.payments[id], ...d }; persist(); },
-    async deletePayment(id) { await delay(); delete data.payments[id]; persist(); },
+    async deletePayment(id) { await delay(); drop('payments', id); persist(); },
+    async listTrash() {
+      await delay();
+      const items = Object.values(data.trash).map(clone).sort((a, b) => b.deletedAt - a.deletedAt);
+      const live = new Set(items.filter((t) => data[t.col]?.[t.id]).map((t) => `${t.col}/${t.id}`));
+      return { items, live };
+    },
 
     watchOpenShifts: (cb) => watch(() => cb(list('shifts', (s) => s.open === true))),
     watchDevices: (cb) => watch(() => cb(list('devices'))),
