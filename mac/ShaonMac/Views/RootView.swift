@@ -47,8 +47,19 @@ struct RootView: View {
                     .badge(model.pendingRequests.count + model.unseenNotices.count)
                     .tag(Route.requests)
                 Label("טלפונים מחוברים", systemImage: "iphone.gen3").tag(Route.phones)
+                let lay = model.sidebarLayout()
+                let byId = Dictionary(uniqueKeysWithValues: model.visibleEmployees().map { ($0.id, $0) })
+                let canMove = search.isEmpty
+                let pinnedRows = shown(lay.pinned, byId)
+                if !pinnedRows.isEmpty {
+                    Section("נעוצות") {
+                        ForEach(pinnedRows) { e in row(e, agg[e.id]).tag(Route.employee(e.id)).contextMenu { menu(e, lay) } }
+                            .onMove(perform: canMove ? { model.applyLayout(lay.moved(pinnedGroup: true, from: $0, to: $1)) } : nil)
+                    }
+                }
                 Section("עובדות") {
-                    ForEach(filtered(active: true)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)) }
+                    ForEach(shown(lay.rest, byId)) { e in row(e, agg[e.id]).tag(Route.employee(e.id)).contextMenu { menu(e, lay) } }
+                        .onMove(perform: canMove ? { model.applyLayout(lay.moved(pinnedGroup: false, from: $0, to: $1)) } : nil)
                 }
                 let arch = filtered(active: false)
                 if !arch.isEmpty {
@@ -90,6 +101,19 @@ struct RootView: View {
         }
     }
 
+    private func shown(_ ids: [String], _ byId: [String: Employee]) -> [Employee] {
+        ids.compactMap { byId[$0] }.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
+    }
+    /// Right-click menu: pin / unpin and move (drag & drop in the list does the same).
+    @ViewBuilder private func menu(_ e: Employee, _ lay: EmpLayout) -> some View {
+        let pinned = lay.pinned.contains(e.id)
+        Button(pinned ? "ביטול נעיצה" : "נעיצה בראש הרשימה", systemImage: pinned ? "pin.slash" : "pin") {
+            model.applyLayout(lay.togglingPin(e.id))
+        }
+        Divider()
+        Button("הזזה למעלה", systemImage: "arrow.up") { model.applyLayout(lay.moving(e.id, by: -1)) }
+        Button("הזזה למטה", systemImage: "arrow.down") { model.applyLayout(lay.moving(e.id, by: 1)) }
+    }
     private func filtered(active: Bool) -> [Employee] {
         model.visibleEmployees().filter { $0.isActive == active && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) }
     }
@@ -97,6 +121,9 @@ struct RootView: View {
         HStack {
             Avatar(name: e.name, size: 26)
             Text(e.name)
+            if model.settings?.empPinned?.contains(e.id) == true {
+                Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.tint).help("נעוצה בראש הרשימה")
+            }
             if model.openShift(of: e.id) != nil {
                 Circle().fill(.green).frame(width: 8, height: 8).help("בעבודה עכשיו")
             }

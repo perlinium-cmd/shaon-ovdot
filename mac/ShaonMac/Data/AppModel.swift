@@ -161,6 +161,17 @@ final class AppModel {
         return (employees ?? []).filter { $0.isActive || a[$0.id] != nil }
     }
 
+    /// The employees on the list (active ones), pinned first, in the manager's personal order.
+    func sidebarLayout() -> EmpLayout {
+        EmpLayout(visibleEmployees().filter(\.isActive), order: settings?.empOrder, pinned: settings?.empPinned)
+    }
+    /// Saves a new order / pinning. Shown at once; if saving fails the old order comes back.
+    func applyLayout(_ l: EmpLayout) {
+        guard l != sidebarLayout() else { return }
+        let v = l.settingsValues(previousOrder: settings?.empOrder)
+        Task { await saveSettings { $0.empOrder = v.order; $0.empPinned = v.pinned } }
+    }
+
     // MARK: feedback + undo
     func say(_ msg: String, long: Bool = false) {
         toast = msg
