@@ -616,3 +616,61 @@ describe('recycle bin (web data layer, public/trash.js)', () => {
     await assertFails(setDoc(u(phoneDb(), 'trash', 'shifts__x'), { col: 'shifts', id: 'x', data: { empId: 'e1' } }));
   });
 });
+
+describe('recycle bin is required (rules)', () => {
+  const tref = (db, col, id) => u(db, 'trash', trashId(col, id));
+  const copyOf = async (col, id) => (await getDoc(u(ownerDb(), col, id))).data();
+  /** One batch: the copy (as given) + the delete. */
+  function delWith(col, id, copy, { tid = trashId(col, id), extra = {} } = {}) {
+    const db = ownerDb(), b = writeBatch(db);
+    b.set(u(db, 'trash', tid), { col, id, data: copy, deletedAt: serverTimestamp(), by: OWNER, ...extra });
+    b.delete(u(db, col, id));
+    return b.commit();
+  }
+
+  it('an employee, shift or payment cannot be deleted without a copy (an old app open somewhere)', async () => {
+    await assertFails(deleteDoc(u(ownerDb(), 'employees', 'e1')));
+    await assertFails(deleteDoc(u(ownerDb(), 'shifts', 'm1')));
+    await assertFails(deleteDoc(u(ownerDb(), 'payments', 'p1')));
+  });
+  it('with an exact copy in the same batch it can (web and Mac write the same shape)', async () => {
+    for (const [col, id] of [['employees', 'e2'], ['shifts', 'm1'], ['payments', 'p1']]) {
+      await assertSucceeds(delWith(col, id, await copyOf(col, id)));
+    }
+  });
+  it('a copy that is not exactly the record is refused (wrong sum, stale read, missing field)', async () => {
+    const p = await copyOf('payments', 'p1');
+    await assertFails(delWith('payments', 'p1', { ...p, amount: 1 }));
+    await assertFails(delWith('payments', 'p1', { empId: p.empId, amount: p.amount }));
+    await assertFails(delWith('payments', 'p1', p, { tid: trashId('payments', 'p2') }));
+    await assertFails(delWith('payments', 'p1', p, { extra: { by: 'someone' } }));
+    await assertFails(delWith('payments', 'p1', p, { extra: { note: 'x' } }));
+    assert.equal((await getDoc(u(ownerDb(), 'payments', 'p1'))).data().amount, 240);
+  });
+  it('five deletes with copies fit in one batch', async () => {
+    const db = ownerDb(), b = writeBatch(db);
+    for (const [col, id] of [['shifts', 'm1'], ['shifts', 'm2'], ['shifts', 'paid1'], ['payments', 'p1'], ['payments', 'p2']]) {
+      b.set(tref(db, col, id), { col, id, data: await copyOf(col, id), deletedAt: serverTimestamp(), by: OWNER });
+      b.delete(u(db, col, id));
+    }
+    await assertSucceeds(b.commit());
+  });
+  it('the bin cannot be emptied, edited or filled with anything but a real delete', async () => {
+    await delWith('shifts', 'm1', await copyOf('shifts', 'm1'));
+    await assertFails(deleteDoc(tref(ownerDb(), 'shifts', 'm1')));
+    await assertFails(updateDoc(tref(ownerDb(), 'shifts', 'm1'), { 'data.out': '23:00' }));
+    // overwriting the copy of something already deleted, or a copy of something still there
+    await assertFails(setDoc(tref(ownerDb(), 'shifts', 'm1'), { col: 'shifts', id: 'm1', data: {}, deletedAt: serverTimestamp(), by: OWNER }));
+    await assertFails(setDoc(tref(ownerDb(), 'shifts', 'm2'), { col: 'shifts', id: 'm2', data: await copyOf('shifts', 'm2'), deletedAt: serverTimestamp(), by: OWNER }));
+    await assertFails(setDoc(tref(ownerDb(), 'notices', 'n1'), { col: 'notices', id: 'n1', data: {}, deletedAt: serverTimestamp(), by: OWNER }));
+    assert.equal((await getDoc(tref(ownerDb(), 'shifts', 'm1'))).data().data.out, '14:00');
+  });
+  it('everything else is deleted as before, and so is a record that is already gone', async () => {
+    await pairPhone();
+    await assertSucceeds(deleteDoc(u(ownerDb(), 'devices', 'phone1')));
+    await assertSucceeds(deleteDoc(u(ownerDb(), 'notices', 'n1')));
+    await assertSucceeds(deleteDoc(u(ownerDb(), 'requests', 'r1')));
+    await assertSucceeds(deleteDoc(u(ownerDb(), 'shifts', 'nothing-here')));
+    await assertSucceeds(setDoc(u(ownerDb(), 'settings', 'main'), { defaultRate: 41 }, { merge: true }));
+  });
+});

@@ -38,8 +38,42 @@ service cloud.firestore {
     /* ---------- the manager's private space ---------- */
 
     // Each Google account has its own private space. Nobody can see anyone else's data.
-    match /users/{uid}/{document=**} {
+    match /users/{uid} {
       allow read, write: if isOwner(uid);
+    }
+    match /users/{uid}/{col}/{id}/{sub}/{rest=**} {   // anything nested deeper (none today)
+      allow read, write: if isOwner(uid);
+    }
+    match /users/{uid}/{col}/{id} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && col != 'trash';
+      // An employee, shift or payment is deleted only together with a full copy of it in the bin (public/trash.js).
+      allow delete: if isOwner(uid) && col != 'trash'
+        && (!(col in trashed()) || resource == null || inTrash(uid, col, id));
+    }
+
+    /* Recycle bin: users/{uid}/trash/{col}__{id} = {col, id, data, deletedAt, by}. A copy is written only in the same
+       batch that deletes the original, and is never deleted, so nothing with money in it is gone for good.
+       Cost: 3 document reads per deleted record (the apps put at most 5 in a batch; the limit is 20). */
+    function trashed() { return ['employees', 'shifts', 'payments']; }
+    function livePath(uid, col, id) { return /databases/$(database)/documents/users/$(uid)/$(col)/$(id); }
+    function inTrash(uid, col, id) {
+      let t = getAfter(/databases/$(database)/documents/users/$(uid)/trash/$(col + '__' + id)).data;
+      return t.col == col && t.id == id && t.data == resource.data
+        && t.deletedAt == request.time && t.by == request.auth.uid;
+    }
+
+    match /users/{uid}/trash/{tid} {
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['col', 'id', 'data', 'deletedAt', 'by'])
+        && request.resource.data.col in trashed()
+        && request.resource.data.id is string
+        && tid == request.resource.data.col + '__' + request.resource.data.id
+        && request.resource.data.data is map
+        && request.resource.data.deletedAt == request.time
+        && request.resource.data.by == request.auth.uid
+        && exists(livePath(uid, request.resource.data.col, request.resource.data.id))
+        && !existsAfter(livePath(uid, request.resource.data.col, request.resource.data.id));
     }
 
     /* ---------- pairing a phone ---------- */
