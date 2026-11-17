@@ -5,12 +5,13 @@ import FirebaseFirestore
 @MainActor
 final class FirestoreStore: DataStore {
     let isDemo = false
-    private let db = Firestore.firestore()
+    private let db: Firestore
     private let uid: String
     var onProblem: ((String) -> Void)?
     var onDenied: (() -> Void)?
 
-    init(uid: String) { self.uid = uid }
+    /// `db`: only the emulator tests (EmulatorRulesTests) pass another one.
+    init(uid: String, db: Firestore = Firestore.firestore()) { self.uid = uid; self.db = db }
 
     private func col(_ n: String) -> CollectionReference { db.collection("users").document(uid).collection(n) }
     private func doc(_ n: String, _ id: String) -> DocumentReference { col(n).document(id) }
@@ -163,7 +164,7 @@ final class FirestoreStore: DataStore {
         var copies: [[String: Any]?] = []
         for w in writes {
             guard case let .delete(c, id) = w, Trash.cols.contains(c) else { copies.append(nil); continue }
-            if let d = known["\(c)/\(id)"] { copies.append(d) } else { copies.append(try await snapshot([(c, id)]).first?.data) }
+            if let d = known["\(c)/\(id)"] { copies.append(d) } else { copies.append(try await current(c, id)) }
         }
         for group in Trash.plan(copies.map { $0 != nil }) {
             let b = db.batch()
@@ -180,6 +181,17 @@ final class FirestoreStore: DataStore {
                 }
             }
             try await write(b)
+        }
+    }
+    /// A document as it is now, for its copy in the bin: from the server when there is a connection — this Mac's copy of
+    /// a document nothing here listens to (another month) may be old, and the rules take only an exact copy
+    /// (EmulatorRulesTests) — else this Mac's copy; StoreError.offline when there is neither.
+    private func current(_ c: String, _ id: String) async throws -> [String: Any]? {
+        do {
+            let s = try await doc(c, id).getDocument()
+            return s.exists ? s.data() : nil
+        } catch let e as NSError where e.domain == FirestoreErrorDomain && e.code == FirestoreErrorCode.unavailable.rawValue {
+            throw StoreError.offline
         }
     }
     /// Reads this Mac's copy first, so undo works offline; asks the server only for what isn't here.
