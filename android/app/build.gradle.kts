@@ -13,8 +13,8 @@ android {
         applicationId = "com.perlinium.shaon.employee"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
         // ./gradlew assembleDebug -Pemulator=true  -> talks to the local Firebase emulators (tests), never to real data.
         buildConfigField("boolean", "USE_EMULATOR", (project.findProperty("emulator") == "true").toString())
     }
@@ -37,7 +37,13 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
+            // In-app updates (update/Updater.kt): tools/release-android.sh publishes here. A qa build with
+            // -Pemulator=true checks a local test server on the Mac (port 5055) instead, never the real one.
+            val feed = if (project.findProperty("emulator") == "true") "http://10.0.2.2:5055/android/latest.json"
+                else "https://shaon-ovdot-2c10.web.app/android/latest.json"
+            buildConfigField("String", "UPDATE_FEED", "\"$feed\"")
         }
+        debug { buildConfigField("String", "UPDATE_FEED", "\"\"") }   // debug key: a release APK can't install over it
         // The exact release build (R8, release key) pointed at the local emulators: ./gradlew assembleQa -Pemulator=true
         create("qa") {
             initWith(getByName("release"))

@@ -75,9 +75,15 @@ private enum class Tab(val label: String) { Clock("שעון"), Month("החודש
 @Composable
 private fun App(incomingCode: String?) {
     val phase by Repo.phase.collectAsState()
+    UpdateEffects()
     when (val p = phase) {
         Phase.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        is Phase.NeedsPairing -> Scaffold { pad -> Box(Modifier.padding(pad)) { PairingScreen(p.message, incomingCode) } }
+        is Phase.NeedsPairing -> Scaffold { pad ->
+            Column(Modifier.padding(pad).fillMaxSize()) {
+                UpdateBanner(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+                Box(Modifier.weight(1f)) { PairingScreen(p.message, incomingCode) }
+            }
+        }
         Phase.NeedsNetwork -> Scaffold { pad ->
             Column(Modifier.padding(pad).fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
@@ -139,11 +145,14 @@ private fun Main() {
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad)) {
-            when (tab) {
-                Tab.Clock -> ClockScreen(onUndo = ::undoable, onOpenMonth = { tab = Tab.Month }, onRequest = { sheetFor = true to it })
-                Tab.Month -> MonthScreen(onShift = { sheetFor = true to it })
-                Tab.Requests -> RequestsScreen(onNew = { sheetFor = true to null })
+        Column(Modifier.padding(pad).fillMaxSize()) {
+            UpdateBanner(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+            Box(Modifier.weight(1f)) {
+                when (tab) {
+                    Tab.Clock -> ClockScreen(onUndo = ::undoable, onOpenMonth = { tab = Tab.Month }, onRequest = { sheetFor = true to it })
+                    Tab.Month -> MonthScreen(onShift = { sheetFor = true to it })
+                    Tab.Requests -> RequestsScreen(onNew = { sheetFor = true to null })
+                }
             }
         }
     }
